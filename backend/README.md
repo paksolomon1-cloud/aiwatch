@@ -35,10 +35,15 @@ py -3.12 eval\run_eval.py
 
 Expected current state:
 
-- pytest: `109` passing tests
+- pytest: `113` passing tests
 - eval: `39/39`
 - core seed: `5 events / 7 alerts`
 - extended seed: `8 events / 10 alerts`
+
+API polish expectations:
+
+- `POST /v1/events` rejects request bodies over 4 MiB with `413` before `AgentEvent` validation or canonical ingest.
+- `GET /v1/sessions/{session_id}/replay` returns `404` for missing sessions and still returns valid sessions with events and zero alerts.
 
 ## Scope
 

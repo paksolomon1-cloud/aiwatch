@@ -339,8 +339,13 @@ py -3.12 eval\run_eval.py
 Current expected results:
 
 ```text
-pytest: 109 passed
+pytest: 113 passed
 eval: 39/39 passed
 false positives: none
 false negatives: none
 ```
+
+Backend API polish expected in this checkpoint:
+
+- `POST /v1/events` rejects request bodies over 4 MiB with `413`.
+- Missing session replay requests return `404`; intentional dashboard clear/reset flows should not show false replay-load errors.

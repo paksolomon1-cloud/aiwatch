@@ -14,13 +14,15 @@ No future task should broaden AIWatch's claim without first updating this spec.
   - initial demo-ready checkpoint
   - generated artifact ignore cleanup
   - UI/layout/R-MCP-005 collapse/root wording fixes
-- `pytest`: `99 passed`
+- `pytest`: `113 passed`
 - `eval`: `39/39`
 - Frontend build passes.
 - Fixture stdio smoke works.
 - Claude Code stdio MCP smoke works.
 - Real MCP package smoke works using `@modelcontextprotocol/server-sequential-thinking@2025.7.1`.
+- Second real MCP package smoke works using `@modelcontextprotocol/server-memory@2026.1.26`.
 - Real package smoke expected tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`.
+- Second real package smoke expected tools: `add_observations`, `create_entities`, `create_relations`, `delete_entities`, `delete_observations`, `delete_relations`, `open_nodes`, `read_graph`, and `search_nodes` under `modelcontextprotocol-memory`.
 - Real package smoke expected alerts: `No alerts found.`
 - Canonical ingest is `backend/app/storage.py::ingest_event()`.
 - Real ingestion paths route through canonical ingest.
@@ -28,9 +30,10 @@ No future task should broaden AIWatch's claim without first updating this spec.
 - `R-MCP-005` redaction regressions cover tested backend/API/CLI surfaces.
 - `aiwatch doctor` and `aiwatch doctor --json` exist.
 - Root API message now uses canonical MCP-first wording.
-- Dashboard proof points show `99`, `39/39`, `5/7`, `8/10`.
+- Dashboard proof points show `113`, `39/39`, `5/7`, `8/10`.
 - `R-MCP-005` action params are collapsed by default in session replay.
-- Backend was not changed during the UI polish pass except the root `/` message string.
+- Nonexistent session replay now returns `404`.
+- `POST /v1/events` rejects request bodies over 4 MiB with `413` before `AgentEvent` validation or canonical ingest.
 
 ### Demo seed counts
 
@@ -45,17 +48,17 @@ No future task should broaden AIWatch's claim without first updating this spec.
 | --- | --- | --- |
 | Finding 1: stale dashboard proof numbers | Closed | Dashboard now reflects current proof points. |
 | Finding 12: root endpoint positioning drift | Closed | Root endpoint now uses MCP-first positioning. |
+| Finding 2: unbounded readline in stdio tap | Closed | Stdio tap has a max frame size and oversized-frame tests. |
+| Finding 3: non-UTF-8 upstream output can crash tap | Closed | Stdio tap decodes invalid upstream bytes safely. |
+| Finding 4: hung upstream process cleanup | Closed | Stdio tap terminates then kills on cleanup timeout. |
+| Finding 6: `request_methods` no eviction | Closed | Pending request-method correlation map is capped. |
+| Finding 7: no `/v1/events` request body size limit | Closed | `/v1/events` has a 4 MiB raw body guard and 413 tests. |
+| Finding 8: replay returns `200` for nonexistent sessions | Closed | Missing replay sessions return 404; frontend intentional reset flows avoid false errors. |
 
 ### Currently open findings
 
 | Finding | Status | Priority area |
 | --- | --- | --- |
-| Finding 2: unbounded readline in stdio tap | Open | Stdio tap robustness |
-| Finding 3: non-UTF-8 upstream output can crash tap | Open | Stdio tap robustness |
-| Finding 4: hung upstream process cleanup | Open | Stdio tap robustness |
-| Finding 6: `request_methods` no eviction | Open | Stdio tap robustness |
-| Finding 7: no `/v1/events` request body size limit | Open | API hardening |
-| Finding 8: replay returns `200` for nonexistent sessions | Open | API/demo polish |
 | Finding 9: duplicate frame method logic | Open | Cleanup/refactor |
 
 ### Skipped or noise findings
@@ -282,15 +285,18 @@ Required redaction statement:
 
 | Proof point | Current result |
 | --- | --- |
-| Backend tests | `99 passed` |
+| Backend tests | `113 passed` |
 | Eval | `39/39` |
 | Fixture stdio smoke | Works |
 | Claude Code stdio MCP smoke | Works |
 | Real MCP package smoke | Works with `@modelcontextprotocol/server-sequential-thinking@2025.7.1` |
+| Second real MCP package smoke | Works with `@modelcontextprotocol/server-memory@2026.1.26` |
 | Canonical ingest audit | Complete |
 | Rollback tests | Present |
 | Redaction regression tests | Present |
 | Doctor secrecy tests | Present |
+| Replay missing-session behavior | `404` |
+| `/v1/events` raw body guard | 4 MiB, returns `413` before validation/ingest |
 | Demo seed count tests | Present |
 | Frontend build | Passing |
 | Phrase scan | Clean |
@@ -499,20 +505,18 @@ Forbidden wording after success:
 
 ## 10. Replay 404 Coupling Warning
 
-Hidden coupling:
+Resolved coupling:
 
-- The frontend currently reloads selected replay after clear, seed, and credential demo actions.
-- This works because the replay endpoint currently returns `200` with empty lists for nonexistent sessions.
-- If replay changes to `404`, `handleClear` may show an error banner.
+- The replay endpoint now returns `404` for nonexistent sessions.
+- The frontend uses explicit clear-state handling and silent stale replay refreshes for intentional clear, seed, and credential demo actions.
+- Intentional reset flows should not show a false replay-load error banner.
 
-Before fixing Finding 8, add one of:
+The accepted fix used both patterns where appropriate:
 
 - `loadSessionReplay(..., { silent: true })`
 - clear `selectedSessionId` and `sessionReplay` before reloading
 
-Preferred approach:
-
-- Use a silent flag or explicit clear-state handling so intentional clears do not look like failures.
+Normal user-triggered replay load errors should still be visible.
 
 ## 11. Demo and UI Guardrails
 
@@ -579,14 +583,15 @@ npm run build
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
-py -3.12 scripts\aiwatch.py clear --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py clear
 py -3.12 scripts\run_realistic_stdio_tap_smoke.py --backend-url http://127.0.0.1:7330
 py -3.12 scripts\run_real_mcp_package_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\run_second_real_mcp_package_smoke.py --backend-url http://127.0.0.1:7330
 ```
 
 Note:
 
-- If `aiwatch.py clear` does not accept `--backend-url` in the current CLI, run `py -3.12 scripts\aiwatch.py clear` from the backend directory instead. Do not change CLI semantics casually to match this validation note.
+- `aiwatch.py clear` clears the local SQLite database directly and does not take `--backend-url`.
 - Smoke scripts require a running backend.
 - Real package smoke requires Node/npm/`npx` on PATH and may download the pinned package on first run.
 

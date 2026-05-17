@@ -155,9 +155,12 @@ Key message:
 - `aiwatch doctor` config health check
 - local stdio MCP wrapper/tap path
 - Claude Code local stdio MCP runtime smoke succeeded
+- two real no-token MCP package smoke paths
+- `/v1/events` 4 MiB request body guard
+- missing session replay returns `404`
 - React dashboard
 - deterministic local eval harness
-- 109 pytest passing
+- 113 pytest passing
 - 39/39 eval passing
 
 ## Claims Not To Make

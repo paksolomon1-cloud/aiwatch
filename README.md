@@ -32,7 +32,8 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 
 - Claude Code local stdio MCP wrapper runtime smoke succeeded on Windows.
 - AIWatch observed Claude Code-routed MCP traffic when Claude Code launched an MCP server through the AIWatch stdio wrapper.
-- Tests recently passed: `109`.
+- Real MCP package smokes passed for `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
+- Tests recently passed: `113`.
 - Eval recently passed: `39/39`.
 - Core seed expected count: `5 events / 7 alerts`.
 - Extended seed expected count: `8 events / 10 alerts`.
@@ -114,6 +115,8 @@ py -3.12 eval\run_eval.py
 
 - MCP traffic must be routed through AIWatch to be observed.
 - This is a local/dev demo posture, not a production enterprise gateway.
+- `POST /v1/events` rejects request bodies over 4 MiB before event validation or ingest.
+- Missing session replay requests return `404`.
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude Code internals, Cursor internals, or arbitrary local process activity.
 - AIWatch does not guarantee prevention of all exfiltration.
 - AIWatch does not implement production auth, HMAC logs, semantic embeddings, HTTP/SSE MCP proxying, SIEM/exporters, ML detection, or Cursor runtime support.
@@ -124,8 +127,10 @@ py -3.12 eval\run_eval.py
 - [Reproducible demo checklist](QUICKSTART_DEMO.md)
 - [Demo script](DEMO_SCRIPT.md)
 - [Real MCP package smoke](REAL_MCP_PACKAGE_SMOKE.md)
+- [Realistic local stdio MCP smoke](REALISTIC_MCP_SMOKE.md)
 - [Claude Code runtime smoke checklist](docs/CLAUDE_CODE_RUNTIME_SMOKE.md)
 - [Claude Code MCP wrapper docs](docs/CLAUDE_CODE_MCP_WRAPPER.md)
+- [Cursor MCP smoke exploration](docs/CURSOR_MCP_RUNTIME_SMOKE.md)
 - [AIWatch doctor docs](docs/AIWATCH_DOCTOR.md)
 - [MCP credential parameter detection](docs/MCP_CREDENTIAL_PARAMETER_DETECTION.md)
 - [Threat model](THREAT_MODEL.md)

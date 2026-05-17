@@ -4,12 +4,12 @@
 
 This is a research spike only.
 
-- No Claude Code integration is implemented here.
+- No broad Claude Code integration is implemented here; the verified path is the narrow Claude Code-routed MCP wrapper smoke documented in `docs/CLAUDE_CODE_RUNTIME_SMOKE.md`.
 - No Cursor integration is implemented here.
 - No detection, storage, frontend, or API behavior changes are proposed in this document.
-- Current pre-demo scope is MCP-first: the reproducible demo uses the AIWatch wrapper, fixture/real-package stdio smoke paths, and the documented Claude Code-routed MCP smoke evidence. Cursor runtime support is not implemented and is not part of the current demo.
+- Current scope is MCP-first: the reproducible demo uses the AIWatch wrapper, fixture/real-package stdio smoke paths, and the documented Claude Code-routed MCP smoke evidence. Cursor runtime support is still exploratory unless locally verified through the wrapper.
 
-`AIWATCH_SPEC_V2.md` was not present anywhere under `C:\Users\pakso\Desktop\aiwatch` during this spike, so this memo uses the current repository behavior as the practical source of truth.
+For current implementation order and product boundary, use `AIWATCH_NEXT_PHASE_SPEC.md` as the source of truth.
 
 ## Repo Readiness
 
@@ -27,6 +27,7 @@ From `backend/app/cli.py`:
 - `demo-seed`
 - `tap-demo`
 - `eval`
+- `doctor`
 - `tools`
 - `alerts`
 
@@ -36,12 +37,15 @@ From `backend/app/cli.py`:
 - `backend/scripts/run_stdio_tap_demo.py`
 - `backend/scripts/realistic_mcp_fixture_server.py`
 - `backend/scripts/run_realistic_stdio_tap_smoke.py`
+- `backend/scripts/run_real_mcp_package_smoke.py`
+- `backend/scripts/run_second_real_mcp_package_smoke.py`
 
 ### Current docs status
 
 - Root demo flow exists in `DEMO_SCRIPT.md`.
 - Backend project summary exists in `backend/README.md`.
 - Realistic stdio smoke doc exists in `REALISTIC_MCP_SMOKE.md`.
+- Real package smoke docs exist in `REAL_MCP_PACKAGE_SMOKE.md`.
 
 ### Readiness result
 

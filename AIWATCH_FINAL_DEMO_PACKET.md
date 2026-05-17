@@ -74,7 +74,7 @@ MCP gives agents tools, and tool definitions plus tool calls create a real trust
 
 1. Mention fixture stdio smoke.
 2. Mention Claude Code stdio MCP smoke.
-3. Mention real MCP package smoke with `@modelcontextprotocol/server-sequential-thinking@2025.7.1`.
+3. Mention the two real MCP package smokes with `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
 4. Say:
 
 `This is a narrow, local proof that AIWatch can observe MCP traffic routed through its wrapper, not a universal client or proxy claim.`
@@ -143,8 +143,9 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `99 passed`
+- tests: `113 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
+- second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
 
 ## 5. Architecture explanation
@@ -204,15 +205,17 @@ Does not catch:
 
 ## 7. Proof points
 
-- `pytest`: `99 passed`
+- `pytest`: `113 passed`
 - `eval`: `39/39`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke
-- real MCP package smoke
+- two real MCP package smokes
 - canonical ingest audit
 - rollback tests
 - redaction regressions
 - doctor secrecy tests
+- `/v1/events` request body size guard
+- replay missing-session `404`
 - seed count tests
 
 ## 8. Hard Q&A
@@ -271,7 +274,7 @@ Because it is there to show redacted evidence cleanly in the dashboard without c
 
 ### What does the real MCP package smoke prove?
 
-It proves that one real local stdio MCP package can run through the AIWatch wrapper, populate the registry, and avoid false-positive alerts in a clean run.
+It proves that the pinned real local stdio MCP package paths can run through the AIWatch wrapper, populate the registry, and avoid false-positive alerts in a clean run.
 
 ### What are the biggest limitations?
 
