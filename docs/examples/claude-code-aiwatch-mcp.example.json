@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "aiwatch-fixture-notes": {
+      "type": "stdio",
+      "command": "py",
+      "args": [
+        "-3.12",
+        "${CLAUDE_PROJECT_DIR:-.}/backend/scripts/aiwatch_stdio_tap.py",
+        "--server-id",
+        "fixture-notes-mcp",
+        "--backend-url",
+        "${AIWATCH_BACKEND_URL:-http://127.0.0.1:7330}",
+        "--",
+        "py",
+        "-3.12",
+        "${CLAUDE_PROJECT_DIR:-.}/backend/scripts/realistic_mcp_fixture_server.py"
+      ]
+    }
+  }
+}

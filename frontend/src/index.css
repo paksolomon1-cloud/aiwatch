@@ -1,0 +1,83 @@
+:root {
+  color-scheme: dark;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #dbe6f2;
+  background:
+    radial-gradient(circle at top left, rgba(77, 200, 255, 0.08), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 159, 67, 0.07), transparent 24%),
+    linear-gradient(180deg, #07111b 0%, #0b1625 60%, #060c15 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --bg: #08111c;
+  --panel: #0f1b2b;
+  --panel-2: #132235;
+  --border: rgba(58, 84, 114, 0.6);
+  --text: #dbe6f2;
+  --muted: #8ea3b8;
+  --accent: #4dc8ff;
+  --critical: #ff5d5d;
+  --high: #ff9f43;
+  --medium: #ffd166;
+  --low: #62d2a2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+body,
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Space Grotesk', 'Aptos', sans-serif;
+  letter-spacing: -0.03em;
+}
+
+a {
+  color: inherit;
+}
+
+@media (max-width: 960px) {
+  #root {
+    padding: 1rem;
+  }
+}
