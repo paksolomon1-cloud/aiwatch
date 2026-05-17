@@ -86,6 +86,15 @@ py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
 py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 ```
 
+Run the second real MCP package smoke with another harmless no-token package:
+
+```powershell
+py -3.12 scripts\aiwatch.py clear
+py -3.12 scripts\run_second_real_mcp_package_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
 Run the config health check from the repo root:
 
 ```powershell

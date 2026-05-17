@@ -252,7 +252,75 @@ No alerts found.
 
 This proves one real local stdio MCP package can route through AIWatch and populate the MCP registry without false-positive alerts. It does not prove universal production compatibility, HTTP/SSE proxy support, or generic Claude/Cursor monitoring.
 
-## D. Claude Code Smoke Pointer
+## D. Second Real MCP Package Smoke
+
+This uses `@modelcontextprotocol/server-memory@2026.1.26`.
+
+### 1. Start Backend
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --port 7330
+```
+
+### 2. Clear Data
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py clear
+```
+
+### 3. Run Smoke
+
+```powershell
+py -3.12 scripts\run_second_real_mcp_package_smoke.py --backend-url http://127.0.0.1:7330
+```
+
+Expected smoke summary:
+
+```text
+Observed tools for modelcontextprotocol-memory: add_observations, create_entities, create_relations, delete_entities, delete_observations, delete_relations, open_nodes, read_graph, search_nodes
+Observed alerts for stdio-real-package-memory-001: 0
+```
+
+### 4. Show Tools
+
+```powershell
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+```
+
+Expected tools under `modelcontextprotocol-memory`:
+
+```text
+add_observations
+create_entities
+create_relations
+delete_entities
+delete_observations
+delete_relations
+open_nodes
+read_graph
+search_nodes
+```
+
+### 5. Show No Alerts
+
+```powershell
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
+Expected:
+
+```text
+No alerts found.
+```
+
+### 6. Explain Scope
+
+This proves another real local stdio MCP package can route through AIWatch and populate the MCP registry without false-positive alerts. It does not prove universal production compatibility, HTTP/SSE proxy support, or generic Claude/Cursor monitoring.
+
+## E. Claude Code Smoke Pointer
 
 Use [docs/CLAUDE_CODE_RUNTIME_SMOKE.md](docs/CLAUDE_CODE_RUNTIME_SMOKE.md) for the Claude Code-routed MCP traffic checklist.
 

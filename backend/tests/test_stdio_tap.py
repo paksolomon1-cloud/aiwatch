@@ -23,6 +23,12 @@ from scripts.run_real_mcp_package_smoke import (
     SESSION_ID as REAL_PACKAGE_SMOKE_SESSION_ID,
     build_tap_command as build_real_package_smoke_command,
 )
+from scripts.run_second_real_mcp_package_smoke import (
+    DEFAULT_PACKAGE as SECOND_REAL_PACKAGE_SMOKE_PACKAGE,
+    SERVER_ID as SECOND_REAL_PACKAGE_SMOKE_SERVER_ID,
+    SESSION_ID as SECOND_REAL_PACKAGE_SMOKE_SESSION_ID,
+    build_tap_command as build_second_real_package_smoke_command,
+)
 from scripts.run_stdio_tap_demo import build_tap_command
 
 
@@ -1029,6 +1035,31 @@ def test_run_real_mcp_package_smoke_builds_shell_safe_npx_command() -> None:
     assert "--log-raw-frames" in command
     separator_index = command.index("--")
     assert command[separator_index + 1 :] == ["npx-test", "-y", REAL_PACKAGE_SMOKE_PACKAGE]
+
+
+def test_run_second_real_mcp_package_smoke_builds_shell_safe_npx_command() -> None:
+    command = build_second_real_package_smoke_command(
+        backend_url="http://localhost:9000",
+        python_executable="python-test",
+        npx_executable="npx-test",
+        package=SECOND_REAL_PACKAGE_SMOKE_PACKAGE,
+        log_raw_frames=True,
+    )
+
+    assert command[0] == "python-test"
+    assert Path(command[1]).is_absolute()
+    assert command[2:6] == [
+        "--server-id",
+        SECOND_REAL_PACKAGE_SMOKE_SERVER_ID,
+        "--session-id",
+        SECOND_REAL_PACKAGE_SMOKE_SESSION_ID,
+    ]
+    assert "--backend-url" in command
+    backend_index = command.index("--backend-url")
+    assert command[backend_index + 1] == "http://localhost:9000"
+    assert "--log-raw-frames" in command
+    separator_index = command.index("--")
+    assert command[separator_index + 1 :] == ["npx-test", "-y", SECOND_REAL_PACKAGE_SMOKE_PACKAGE]
 
 
 def test_claude_code_wrapper_example_json_is_valid_and_uses_argv_shape() -> None:
