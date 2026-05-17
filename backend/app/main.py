@@ -128,10 +128,15 @@ def read_tool_history(fingerprint_id: str) -> list[ToolObservation]:
 
 @app.get("/v1/sessions/{session_id}/replay")
 def replay_session(session_id: str) -> dict[str, object]:
+    events = get_session_events(session_id)
+    alerts = get_session_alerts(session_id)
+    if not events and not alerts:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     return {
         "session_id": session_id,
-        "events": get_session_events(session_id),
-        "alerts": get_session_alerts(session_id),
+        "events": events,
+        "alerts": alerts,
     }
 
 

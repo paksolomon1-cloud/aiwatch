@@ -14,6 +14,16 @@ const BACKEND_URL = 'http://127.0.0.1:7330'
 export const BACKEND_OFFLINE_MESSAGE =
   'Backend offline or blocked. Start the backend with: py -3.12 -m uvicorn app.main:app --reload --port 7330. Demo controls require AIWATCH_DEV_MODE=true.'
 
+export class AiWatchApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'AiWatchApiError'
+    this.status = status
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     const response = await fetch(`${BACKEND_URL}${path}`, {
@@ -25,7 +35,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     })
 
     if (!response.ok) {
-      throw new Error(`AIWatch request failed with status ${response.status}`)
+      throw new AiWatchApiError(`AIWatch request failed with status ${response.status}`, response.status)
     }
 
     return (await response.json()) as T

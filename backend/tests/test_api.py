@@ -128,6 +128,49 @@ def test_r_mcp_005_post_events_path_uses_canonical_ingest_event(monkeypatch, tmp
     clear_db()
 
 
+def test_session_replay_returns_404_for_missing_session(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        response = client.get("/v1/sessions/missing-session/replay")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Session not found"}
+
+    clear_db()
+
+
+def test_session_replay_returns_existing_session_events_without_alerts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    payload = {
+        "event_id": "session-replay-valid-001",
+        "source": "coding_agent",
+        "agent_id": "replay-agent",
+        "session_id": "session-replay-valid",
+        "intent_text": "List project files.",
+        "action_type": "shell_exec",
+        "action_params": {"command": "dir"},
+    }
+
+    with TestClient(app) as client:
+        create_response = client.post("/v1/events", json=payload)
+        replay_response = client.get("/v1/sessions/session-replay-valid/replay")
+
+    assert create_response.status_code == 200
+    assert create_response.json()["alerts_created"] == 0
+    assert replay_response.status_code == 200
+    replay = replay_response.json()
+    assert replay["session_id"] == "session-replay-valid"
+    assert [event["event_id"] for event in replay["events"]] == ["session-replay-valid-001"]
+    assert replay["alerts"] == []
+
+    clear_db()
+
+
 def test_dev_seed_demo_uses_canonical_ingest_event(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
     _set_dev_mode(monkeypatch, enabled=True)

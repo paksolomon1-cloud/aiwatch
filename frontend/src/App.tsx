@@ -1,6 +1,7 @@
 import { startTransition, useEffect, useState } from 'react'
 import './App.css'
 import {
+  AiWatchApiError,
   BACKEND_OFFLINE_MESSAGE,
   clearDevData,
   getAlerts,
@@ -33,6 +34,10 @@ interface SessionSummary {
   alertCount: number
   latestAt: string
   highestSeverity: Severity | 'none'
+}
+
+interface ReplayLoadOptions {
+  silent?: boolean
 }
 
 const severityOrder: Record<Severity, number> = {
@@ -422,7 +427,7 @@ function App() {
     }
   }
 
-  async function loadSessionReplay(sessionId: string) {
+  async function loadSessionReplay(sessionId: string, options: ReplayLoadOptions = {}) {
     if (!sessionId) {
       setSessionReplay(null)
       return
@@ -440,9 +445,15 @@ function App() {
       })
       setErrorMessage(null)
     } catch (error) {
+      setSessionReplay(null)
+      if (options.silent && error instanceof AiWatchApiError && error.status === 404) {
+        setSelectedSessionId((current) => (current === sessionId ? '' : current))
+        setSessionInput((current) => (current === sessionId ? '' : current))
+        return
+      }
+
       const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
       setErrorMessage(message)
-      setSessionReplay(null)
     } finally {
       setIsSessionLoading(false)
     }
@@ -567,9 +578,6 @@ function App() {
       setSelectedTool(null)
       setSelectedToolHistory([])
       await refreshDashboard()
-      if (selectedSessionId) {
-        await loadSessionReplay(selectedSessionId)
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
       setErrorMessage(message)
@@ -592,7 +600,7 @@ function App() {
       )
       await refreshDashboard()
       if (selectedSessionId) {
-        await loadSessionReplay(selectedSessionId)
+        await loadSessionReplay(selectedSessionId, { silent: true })
       }
 
       if (extended) {
@@ -638,7 +646,7 @@ function App() {
       )
       await refreshDashboard()
       if (selectedSessionId) {
-        await loadSessionReplay(selectedSessionId)
+        await loadSessionReplay(selectedSessionId, { silent: true })
       }
       const credentialAlert = posted.alerts.find((alert) => alert.rule_id === 'R-MCP-005') ?? null
       if (credentialAlert) {
