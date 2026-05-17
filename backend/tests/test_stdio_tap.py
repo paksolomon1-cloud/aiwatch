@@ -28,29 +28,34 @@ from scripts.run_stdio_tap_demo import build_tap_command
 
 class _ScriptedStdout:
     def __init__(self) -> None:
-        self._lines: queue.Queue[str | None] = queue.Queue()
+        self._lines: queue.Queue[str | bytes | None] = queue.Queue()
 
-    def push_batch(self, frames: list[str]) -> None:
+    def push_batch(self, frames: list[str | bytes]) -> None:
         for frame in frames:
-            self._lines.put(f"{frame}\n")
+            if isinstance(frame, bytes):
+                self._lines.put(frame + b"\n")
+            else:
+                self._lines.put(f"{frame}\n")
 
     def close(self) -> None:
         self._lines.put(None)
 
-    def readline(self) -> str:
+    def readline(self, _size: int | None = None) -> str | bytes:
         line = self._lines.get()
         return "" if line is None else line
 
 
 class _RecordingStdin:
-    def __init__(self, scripted_stdout: _ScriptedStdout, server_batches: list[list[str]]) -> None:
+    def __init__(self, scripted_stdout: _ScriptedStdout, server_batches: list[list[str | bytes]]) -> None:
         self._scripted_stdout = scripted_stdout
         self._server_batches = list(server_batches)
         self._buffer = ""
         self.closed = False
         self.writes: list[str] = []
 
-    def write(self, text: str) -> int:
+    def write(self, text: str | bytes) -> int:
+        if isinstance(text, bytes):
+            text = text.decode("utf-8", errors="replace")
         self.writes.append(text)
         self._buffer += text
         while "\n" in self._buffer:
@@ -76,7 +81,7 @@ def _run_tap_with_scripted_server(
     tmp_path: Path,
     *,
     client_lines: list[str],
-    server_batches: list[list[str]],
+    server_batches: list[list[str | bytes]],
     post_event=None,
     server_id: str = "fake-notes-mcp",
     session_id: str | None = "stdio-demo-001",
@@ -91,6 +96,7 @@ def _run_tap_with_scripted_server(
             scripted_stdout = _ScriptedStdout()
             self.stdin = _RecordingStdin(scripted_stdout, server_batches)
             self.stdout = scripted_stdout
+            captured["stdin"] = self.stdin
 
         def wait(self, timeout=None):
             captured["wait_timeout"] = timeout
@@ -680,6 +686,206 @@ def test_malformed_server_json_is_forwarded_and_does_not_crash(monkeypatch, tmp_
     assert stdout_text.splitlines() == [malformed_line, response_line]
     assert len(posted_events) == 1
     assert "[aiwatch] invalid server_to_client JSON forwarded" in stderr_text
+
+
+def test_oversized_server_frame_is_forwarded_without_recording(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(tap_module, "MAX_FRAME_BYTES", 128)
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 0}
+
+    client_line = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    oversized_response = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+                "tools": [
+                    {
+                        "name": "list_notes",
+                        "description": "x" * 256,
+                    }
+                ]
+            },
+        }
+    )
+
+    result, stdout_text, stderr_text, _ = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=[client_line],
+        server_batches=[[oversized_response]],
+        post_event=fake_post_event,
+    )
+
+    assert result == 0
+    assert stdout_text.splitlines() == [oversized_response]
+    assert posted_events == []
+    assert "oversized server_to_client frame forwarded without recording" in stderr_text
+    assert "[aiwatch]" not in stdout_text
+
+
+def test_oversized_client_frame_is_forwarded_without_recording(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(tap_module, "MAX_FRAME_BYTES", 128)
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 0}
+
+    client_line = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "export_notes", "arguments": {"payload": "x" * 256}},
+        }
+    )
+
+    result, stdout_text, stderr_text, captured = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=[client_line],
+        server_batches=[[]],
+        post_event=fake_post_event,
+    )
+
+    assert result == 0
+    assert stdout_text == ""
+    assert posted_events == []
+    assert "oversized client_to_server frame forwarded without recording" in stderr_text
+    upstream_stdin = captured["stdin"]
+    assert isinstance(upstream_stdin, _RecordingStdin)
+    assert "".join(upstream_stdin.writes) == f"{client_line}\n"
+
+
+def test_non_utf8_server_output_does_not_crash_and_valid_frame_still_records(monkeypatch, tmp_path: Path) -> None:
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 0}
+
+    client_line = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    valid_response = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": {
+                "tools": [
+                    {
+                        "name": "list_notes",
+                        "description": "Lists notes.",
+                    }
+                ]
+            },
+        }
+    )
+
+    result, stdout_text, stderr_text, _ = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=[client_line],
+        server_batches=[[b"\xff\xfe not-json", valid_response]],
+        post_event=fake_post_event,
+    )
+
+    assert result == 0
+    assert "�� not-json" in stdout_text
+    assert len(posted_events) == 1
+    assert posted_events[0]["action_params"]["tool_name"] == "list_notes"
+    assert "[aiwatch] invalid server_to_client JSON forwarded" in stderr_text
+
+
+def test_hung_upstream_is_terminated_then_killed(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {"wait_calls": 0, "terminated": 0, "killed": 0}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            self.stdin = io.StringIO()
+            self.stdout = io.StringIO("")
+
+        def wait(self, timeout=None):
+            captured["wait_calls"] = int(captured["wait_calls"]) + 1
+            captured["last_wait_timeout"] = timeout
+            if captured["wait_calls"] in (1, 2):
+                raise tap_module.subprocess.TimeoutExpired("python-test", timeout)
+            return 0
+
+        def terminate(self):
+            captured["terminated"] = int(captured["terminated"]) + 1
+
+        def kill(self):
+            captured["killed"] = int(captured["killed"]) + 1
+
+    monkeypatch.setattr("scripts.aiwatch_stdio_tap.subprocess.Popen", FakePopen)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    monkeypatch.setattr("sys.stdout", io.StringIO())
+    stderr_buffer = io.StringIO()
+    monkeypatch.setattr("sys.stderr", stderr_buffer)
+    monkeypatch.setattr(tap_module, "UPSTREAM_WAIT_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(tap_module, "UPSTREAM_TERMINATE_TIMEOUT_SECONDS", 0.01)
+
+    result = run_tap(
+        server_argv=["python-test", "fake_mcp_server.py"],
+        server_id="fake-notes-mcp",
+        session_id="stdio-demo-001",
+        agent_id="aiwatch-stdio-tap",
+        backend_url="http://127.0.0.1:7330",
+        log_path=tmp_path / "frames.jsonl",
+        log_raw_frames=False,
+    )
+
+    assert result == 0
+    assert captured["wait_calls"] == 3
+    assert captured["terminated"] == 1
+    assert captured["killed"] == 1
+    assert "upstream did not exit after stdin close; terminating" in stderr_buffer.getvalue()
+    assert "upstream did not terminate; killing" in stderr_buffer.getvalue()
+
+
+def test_pending_request_methods_are_capped_and_evict_oldest(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(tap_module, "MAX_PENDING_REQUEST_METHODS", 4)
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 0}
+
+    client_lines = [
+        json.dumps({"jsonrpc": "2.0", "id": idx, "method": "tools/list", "params": {}})
+        for idx in range(6)
+    ]
+    tool_response = {
+        "jsonrpc": "2.0",
+        "result": {
+            "tools": [
+                {
+                    "name": "list_notes",
+                    "description": "Lists notes.",
+                }
+            ]
+        },
+    }
+    first_response = json.dumps({"id": 0, **tool_response})
+    retained_response = json.dumps({"id": 5, **tool_response})
+    server_batches = [[], [], [], [], [], [first_response, retained_response]]
+
+    result, stdout_text, stderr_text, _ = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=client_lines,
+        server_batches=server_batches,
+        post_event=fake_post_event,
+    )
+
+    assert result == 0
+    assert stdout_text.splitlines() == [first_response, retained_response]
+    assert len(posted_events) == 1
+    assert posted_events[0]["action_params"]["tool_name"] == "list_notes"
+    assert "[aiwatch] captured tools/list: 1 tools, alerts=0" in stderr_text
 
 
 def test_unmatched_response_with_tools_array_is_forwarded_without_normalizing(

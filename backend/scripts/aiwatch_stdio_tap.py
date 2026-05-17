@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import io
 import json
 import re
 import subprocess
 import sys
 import threading
+from collections import OrderedDict
 import urllib.error
 import urllib.request
 import uuid
@@ -22,6 +24,10 @@ from app.credential_redaction import redact_json_like
 from app.mcp_normalizer import normalize_tools_call_frame, normalize_tools_list_frame
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:7330"
+MAX_FRAME_BYTES = 1024 * 1024
+MAX_PENDING_REQUEST_METHODS = 1024
+UPSTREAM_WAIT_TIMEOUT_SECONDS = 10
+UPSTREAM_TERMINATE_TIMEOUT_SECONDS = 1
 _SESSION_SERVER_ID_PATTERN = re.compile(r"[^A-Za-z0-9_-]+")
 
 
@@ -52,6 +58,120 @@ def _request_id_key(value: Any) -> tuple[str, Any] | None:
     if isinstance(value, float):
         return ("float", value)
     return (type(value).__name__, repr(value))
+
+
+def _raw_line_size(raw_line: bytes | str) -> int:
+    if isinstance(raw_line, bytes):
+        return len(raw_line)
+    return len(raw_line.encode("utf-8", errors="replace"))
+
+
+def _ends_with_newline(raw_line: bytes | str) -> bool:
+    if isinstance(raw_line, bytes):
+        return raw_line.endswith((b"\n", b"\r"))
+    return raw_line.endswith(("\n", "\r"))
+
+
+def _read_frame_line(stream: Any) -> tuple[bytes | str, bool]:
+    try:
+        raw_line = stream.readline(MAX_FRAME_BYTES + 1)
+    except TypeError:
+        raw_line = stream.readline()
+
+    if raw_line in ("", b""):
+        return raw_line, False
+
+    oversized = _raw_line_size(raw_line) > MAX_FRAME_BYTES
+    return raw_line, oversized
+
+
+def _drain_oversized_line(stream: Any, sink: Any) -> None:
+    while True:
+        try:
+            chunk = stream.readline(MAX_FRAME_BYTES + 1)
+        except TypeError:
+            chunk = stream.readline()
+        if chunk in ("", b""):
+            break
+        sink(chunk)
+        if _ends_with_newline(chunk):
+            break
+
+
+def _write_stdout_raw(raw_line: bytes | str) -> None:
+    sys.stdout.write(_decode_frame_line(raw_line))
+
+
+def _write_upstream_raw(stdin: Any, raw_line: bytes | str) -> None:
+    if isinstance(raw_line, bytes):
+        try:
+            stdin.write(raw_line)
+        except TypeError:
+            stdin.write(raw_line.decode("utf-8", errors="replace"))
+        return
+
+    _write_upstream_line(stdin, raw_line)
+
+
+def _forward_oversized_server_line(stream: Any, raw_line: bytes | str) -> None:
+    _write_stdout_raw(raw_line)
+    if not _ends_with_newline(raw_line):
+        _drain_oversized_line(stream, _write_stdout_raw)
+    sys.stdout.flush()
+
+
+def _forward_oversized_client_line(stream: Any, stdin: Any, raw_line: bytes | str) -> None:
+    _write_upstream_raw(stdin, raw_line)
+    if not _ends_with_newline(raw_line):
+        _drain_oversized_line(stream, lambda chunk: _write_upstream_raw(stdin, chunk))
+    stdin.flush()
+
+
+def _decode_frame_line(raw_line: bytes | str) -> str:
+    if isinstance(raw_line, bytes):
+        return raw_line.decode("utf-8", errors="replace")
+    return raw_line
+
+
+def _encode_for_upstream(line: str) -> bytes:
+    return line.encode("utf-8", errors="replace")
+
+
+def _write_upstream_line(stdin: Any, line: str) -> None:
+    if isinstance(stdin, io.TextIOBase):
+        stdin.write(line)
+        return
+    try:
+        stdin.write(_encode_for_upstream(line))
+    except TypeError:
+        stdin.write(line)
+
+
+def _remember_request_method(
+    request_methods: OrderedDict[tuple[str, Any], str],
+    request_id_key: tuple[str, Any],
+    request_method: str,
+) -> None:
+    request_methods[request_id_key] = request_method
+    request_methods.move_to_end(request_id_key)
+    while len(request_methods) > MAX_PENDING_REQUEST_METHODS:
+        request_methods.popitem(last=False)
+
+
+def _cleanup_upstream(upstream: subprocess.Popen[Any]) -> None:
+    try:
+        upstream.wait(timeout=UPSTREAM_WAIT_TIMEOUT_SECONDS)
+        return
+    except subprocess.TimeoutExpired:
+        _stderr("[aiwatch] upstream did not exit after stdin close; terminating")
+
+    upstream.terminate()
+    try:
+        upstream.wait(timeout=UPSTREAM_TERMINATE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        _stderr("[aiwatch] upstream did not terminate; killing")
+        upstream.kill()
+        upstream.wait(timeout=UPSTREAM_TERMINATE_TIMEOUT_SECONDS)
 
 
 def _parse_frame(raw_line: str, *, direction: str) -> dict[str, Any] | None:
@@ -145,7 +265,7 @@ def run_tap(
     if session_id is None:
         _stderr(f"[aiwatch] generated session_id={resolved_session_id}")
 
-    request_methods: dict[tuple[str, Any], str] = {}
+    request_methods: OrderedDict[tuple[str, Any], str] = OrderedDict()
     request_methods_lock = threading.Lock()
     backend_unavailable_logged = False
     server_reader_errors: list[BaseException] = []
@@ -157,9 +277,7 @@ def run_tap(
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
-        text=True,
-        encoding="utf-8",
-        bufsize=1,
+        bufsize=0,
         cwd=ROOT_DIR,
     )
 
@@ -171,12 +289,18 @@ def run_tap(
         nonlocal backend_unavailable_logged
         try:
             while True:
-                raw_server_line = upstream.stdout.readline()
-                if raw_server_line == "":
+                raw_server_line, oversized_server_line = _read_frame_line(upstream.stdout)
+                if raw_server_line in ("", b""):
                     break
 
-                server_line = raw_server_line.rstrip("\r\n")
-                parsed_server = _parse_frame(server_line, direction="server_to_client")
+                server_line = _decode_frame_line(raw_server_line).rstrip("\r\n")
+                parsed_server = None
+                if oversized_server_line:
+                    _stderr("[aiwatch] oversized server_to_client frame forwarded without recording")
+                    _forward_oversized_server_line(upstream.stdout, raw_server_line)
+                    continue
+                else:
+                    parsed_server = _parse_frame(server_line, direction="server_to_client")
                 response_method: str | None = None
 
                 if parsed_server is not None:
@@ -228,19 +352,28 @@ def run_tap(
     server_reader.start()
 
     try:
-        for raw_client_line in sys.stdin:
-            client_line = raw_client_line.rstrip("\r\n")
+        while True:
+            raw_client_line, oversized_client_line = _read_frame_line(sys.stdin)
+            if raw_client_line in ("", b""):
+                break
+            client_line = _decode_frame_line(raw_client_line).rstrip("\r\n")
             if not client_line:
                 continue
 
-            parsed_client = _parse_frame(client_line, direction="client_to_server")
+            parsed_client = None
+            if oversized_client_line:
+                _stderr("[aiwatch] oversized client_to_server frame forwarded without recording")
+                _forward_oversized_client_line(sys.stdin, upstream.stdin, raw_client_line)
+                continue
+            else:
+                parsed_client = _parse_frame(client_line, direction="client_to_server")
             client_method: str | None = None
             if parsed_client is not None:
                 client_method = parsed_client.get("method") if isinstance(parsed_client.get("method"), str) else None
                 client_id_key = _request_id_key(parsed_client.get("id"))
                 if client_method is not None and client_id_key is not None:
                     with request_methods_lock:
-                        request_methods[client_id_key] = client_method
+                        _remember_request_method(request_methods, client_id_key, client_method)
 
             if log_raw_frames and parsed_client is not None:
                 append_frame_log(
@@ -255,8 +388,7 @@ def run_tap(
                     ),
                 )
 
-            upstream.stdin.write(client_line)
-            upstream.stdin.write("\n")
+            _write_upstream_line(upstream.stdin, f"{client_line}\n")
             upstream.stdin.flush()
 
             if parsed_client is None:
@@ -280,7 +412,7 @@ def run_tap(
     finally:
         if upstream.stdin and not upstream.stdin.closed:
             upstream.stdin.close()
-        upstream.wait(timeout=10)
+        _cleanup_upstream(upstream)
         server_reader.join(timeout=10)
 
     if server_reader_errors:
