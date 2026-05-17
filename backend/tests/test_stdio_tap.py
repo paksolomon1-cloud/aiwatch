@@ -1085,3 +1085,28 @@ def test_claude_code_wrapper_example_json_is_valid_and_uses_argv_shape() -> None
     assert args[separator_index + 1] == "py"
     assert args[separator_index + 2] == "-3.12"
     assert args[separator_index + 3].endswith("/backend/scripts/realistic_mcp_fixture_server.py")
+
+
+def test_cursor_wrapper_example_json_is_valid_and_uses_argv_shape() -> None:
+    example_path = Path(__file__).resolve().parents[2] / "docs" / "examples" / "cursor-aiwatch-mcp.example.json"
+
+    parsed = json.loads(example_path.read_text(encoding="utf-8"))
+
+    server = parsed["mcpServers"]["aiwatch-fixture-notes"]
+    assert server["type"] == "stdio"
+    assert server["command"] == "py"
+    assert isinstance(server["args"], list)
+    assert "--" in server["args"]
+
+    args = server["args"]
+    separator_index = args.index("--")
+
+    assert "--server-id" in args
+    assert args[args.index("--server-id") + 1] == "fixture-notes-mcp"
+    assert "--session-id" not in args
+    assert "--backend-url" in args
+    assert args[args.index("--backend-url") + 1] == "http://127.0.0.1:7330"
+    assert args[1].endswith("/backend/scripts/aiwatch_stdio_tap.py")
+    assert args[separator_index + 1] == "py"
+    assert args[separator_index + 2] == "-3.12"
+    assert args[separator_index + 3].endswith("/backend/scripts/realistic_mcp_fixture_server.py")

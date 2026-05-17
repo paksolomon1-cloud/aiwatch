@@ -289,6 +289,17 @@ def test_doctor_detects_cursor_mcp_config_if_present(tmp_path: Path) -> None:
     assert result.status == "wrapped_by_aiwatch"
 
 
+def test_doctor_detects_cursor_example_as_wrapped() -> None:
+    example_path = Path(__file__).resolve().parents[2] / "docs" / "examples" / "cursor-aiwatch-mcp.example.json"
+
+    [result] = inspect_mcp_config_file(example_path)
+
+    assert result.config_path == example_path
+    assert result.server_name == "aiwatch-fixture-notes"
+    assert result.status == "wrapped_by_aiwatch"
+    assert result.reason == "uses aiwatch_stdio_tap.py with -- upstream separator"
+
+
 def test_doctor_warns_when_aiwatch_tap_is_missing_upstream_separator(tmp_path: Path) -> None:
     _write_mcp_config(
         tmp_path / ".mcp.json",

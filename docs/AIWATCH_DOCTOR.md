@@ -38,6 +38,7 @@ The first pass only checks config files under the current working directory:
 - `.cursor/mcp.json`
 
 It does not scan the rest of the machine.
+Classifying a `.cursor/mcp.json` entry as `wrapped_by_aiwatch` is only a config-shape check. It does not prove Cursor runtime support or prove that Cursor loaded the server.
 
 ## Statuses
 
@@ -85,4 +86,4 @@ It cannot prove that Claude Code, Cursor, or another MCP client actually loaded 
 
 ## Limitations
 
-This command does not prove that a client has loaded the config or successfully connected to the MCP server. It only checks the local config shape. Use the Claude Code runtime smoke checklist for an end-to-end manual runtime check.
+This command does not prove that a client has loaded the config or successfully connected to the MCP server. It only checks the local config shape. Use the Claude Code runtime smoke checklist or the Cursor MCP smoke exploration checklist for an end-to-end manual runtime check.

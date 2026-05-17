@@ -32,7 +32,7 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 
 - Claude Code local stdio MCP wrapper runtime smoke succeeded on Windows.
 - AIWatch observed Claude Code-routed MCP traffic when Claude Code launched an MCP server through the AIWatch stdio wrapper.
-- Tests recently passed: `107`.
+- Tests recently passed: `109`.
 - Eval recently passed: `39/39`.
 - Core seed expected count: `5 events / 7 alerts`.
 - Extended seed expected count: `8 events / 10 alerts`.
