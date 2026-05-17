@@ -328,7 +328,7 @@ Manual smoke would not prove:
 ### Overclaims to avoid
 
 - `AIWatch is a whole-product security layer for Claude Code`
-- `AIWatch secures Cursor`
+- `AIWatch provides broad Cursor security coverage`
 - `AIWatch monitors everything the agent does`
 - `AIWatch blocks exfiltration from Claude or Cursor`
 - `AIWatch is a full MCP proxy for all clients`
