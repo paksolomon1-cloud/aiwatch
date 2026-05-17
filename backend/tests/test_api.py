@@ -95,6 +95,64 @@ def test_post_events_route_uses_canonical_ingest_event(monkeypatch, tmp_path: Pa
     clear_db()
 
 
+def test_post_events_rejects_oversized_body_before_validation_and_ingest(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    monkeypatch.setattr(main_module, "MAX_EVENT_REQUEST_BODY_BYTES", 128)
+
+    calls: list[object] = []
+
+    def fake_ingest_event(event):
+        calls.append(event)
+        return []
+
+    monkeypatch.setattr(main_module, "ingest_event", fake_ingest_event)
+    oversized_invalid_body = b'{"source":' + (b"x" * 256)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/events",
+            content=oversized_invalid_body,
+            headers={"Content-Type": "application/json"},
+        )
+        events_response = client.get("/v1/events")
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body too large"}
+    assert calls == []
+    assert events_response.json() == []
+    assert "x" * 128 not in response.text
+
+    clear_db()
+
+
+def test_post_events_normal_body_still_persists_event(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    payload = {
+        "event_id": "normal-body-size-001",
+        "source": "coding_agent",
+        "agent_id": "route-size-agent",
+        "session_id": "route-size-session",
+        "intent_text": "List project files.",
+        "action_type": "shell_exec",
+        "action_params": {"command": "dir"},
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/v1/events", json=payload)
+        events_response = client.get("/v1/events")
+
+    assert response.status_code == 200
+    assert response.json()["event_id"] == "normal-body-size-001"
+    assert response.json()["alerts_created"] == 0
+    assert [event["event_id"] for event in events_response.json()] == ["normal-body-size-001"]
+
+    clear_db()
+
+
 def test_r_mcp_005_post_events_path_uses_canonical_ingest_event(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
 

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.credential_redaction import redact_json_like
 from app.demo_events import demo_seed_items, extended_demo_seed_items
@@ -30,6 +32,7 @@ from app.storage import (
 )
 
 DEV_MODE_TRUTHY_VALUES = {"1", "true", "yes", "on"}
+MAX_EVENT_REQUEST_BODY_BYTES = 4 * 1024 * 1024
 
 
 @asynccontextmanager
@@ -63,6 +66,87 @@ def _store_event_and_alerts(event: AgentEvent) -> list[Alert]:
     return ingest_event(event)
 
 
+def _request_validation_error(errors: list[dict[str, object]]) -> RequestValidationError:
+    return RequestValidationError(errors)
+
+
+def _body_loc_error(error: dict[str, object]) -> dict[str, object]:
+    normalized = dict(error)
+    normalized.pop("url", None)
+    loc = normalized.get("loc", ())
+    if isinstance(loc, str):
+        loc = (loc,)
+    elif not isinstance(loc, tuple):
+        loc = tuple(loc) if isinstance(loc, list) else ()
+    normalized["loc"] = ("body", *loc)
+    return normalized
+
+
+def _json_decode_error(error: json.JSONDecodeError | UnicodeDecodeError) -> RequestValidationError:
+    if isinstance(error, json.JSONDecodeError):
+        message = error.msg
+        position = error.pos
+    else:
+        message = str(error)
+        position = 0
+
+    return _request_validation_error(
+        [
+            {
+                "type": "json_invalid",
+                "loc": ("body", position),
+                "msg": "JSON decode error",
+                "input": {},
+                "ctx": {"error": message},
+            }
+        ]
+    )
+
+
+async def _read_event_request_body(request: Request) -> bytes:
+    raw_content_length = request.headers.get("content-length")
+    if raw_content_length is not None:
+        try:
+            if int(raw_content_length) > MAX_EVENT_REQUEST_BODY_BYTES:
+                raise HTTPException(status_code=413, detail="Request body too large")
+        except ValueError:
+            pass
+
+    body_chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > MAX_EVENT_REQUEST_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Request body too large")
+        body_chunks.append(chunk)
+
+    return b"".join(body_chunks)
+
+
+def _parse_agent_event(raw_body: bytes) -> AgentEvent:
+    if not raw_body:
+        raise _request_validation_error(
+            [
+                {
+                    "type": "missing",
+                    "loc": ("body",),
+                    "msg": "Field required",
+                    "input": None,
+                }
+            ]
+        )
+
+    try:
+        payload = json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise _json_decode_error(error) from None
+
+    try:
+        return AgentEvent.model_validate(payload)
+    except ValidationError as error:
+        raise _request_validation_error([_body_loc_error(item) for item in error.errors()]) from None
+
+
 def _dev_mode_enabled() -> bool:
     return os.environ.get("AIWATCH_DEV_MODE", "").strip().lower() in DEV_MODE_TRUTHY_VALUES
 
@@ -82,7 +166,8 @@ def root() -> dict[str, str]:
 
 
 @app.post("/v1/events")
-def create_event(event: AgentEvent) -> dict[str, object]:
+async def create_event(request: Request) -> dict[str, object]:
+    event = _parse_agent_event(await _read_event_request_body(request))
     try:
         alerts = _store_event_and_alerts(event)
     except DuplicateEventIdError:
