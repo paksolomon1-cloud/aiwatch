@@ -157,7 +157,7 @@ Key message:
 - Claude Code local stdio MCP runtime smoke succeeded
 - React dashboard
 - deterministic local eval harness
-- 99 pytest passing
+- 107 pytest passing
 - 39/39 eval passing
 
 ## Claims Not To Make

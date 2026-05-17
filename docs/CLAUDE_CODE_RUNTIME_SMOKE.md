@@ -3,6 +3,7 @@
 This checklist verifies that Claude Code can route local stdio MCP traffic through the AIWatch wrapper.
 
 It does not prove generic Claude Code monitoring. AIWatch only observes MCP traffic routed through `aiwatch_stdio_tap.py`.
+This manual Claude Code smoke is separate from the fixture and real-package smoke scripts; those scripts verify wrapper mechanics without proving that Claude Code loaded a project MCP config.
 
 ## Verified Manual Runtime Result
 
@@ -111,7 +112,26 @@ C:/Users/pakso/Desktop/aiwatch/backend/scripts/aiwatch_stdio_tap.py
 C:/Users/pakso/Desktop/aiwatch/backend/scripts/realistic_mcp_fixture_server.py
 ```
 
-## 4. Launch Claude Code From Project Root
+## 4. Run AIWatch Doctor
+
+From the repo root, verify that the project MCP config has the expected wrapper shape:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch
+py -3.12 backend\scripts\aiwatch.py doctor
+```
+
+Expected:
+
+```text
+[ok] aiwatch-fixture-notes
+status: wrapped_by_aiwatch
+reason: uses aiwatch_stdio_tap.py with -- upstream separator
+```
+
+This only checks local config shape. It does not prove that Claude Code has loaded the config or launched the MCP server.
+
+## 5. Launch Claude Code From Project Root
 
 Terminal 2:
 
@@ -122,7 +142,7 @@ claude
 
 If your install uses a different executable name, use that command from the same project root.
 
-## 5. Trigger MCP Tool Discovery
+## 6. Trigger MCP Tool Discovery
 
 Inside Claude Code, ask for available MCP tools or otherwise trigger the MCP server to load.
 
@@ -134,7 +154,7 @@ List the available MCP tools for this project.
 
 If Claude Code has an MCP status or tools command in your installed version, use it to confirm that `aiwatch-fixture-notes` loaded.
 
-## 6. Check AIWatch Tools
+## 7. Check AIWatch Tools
 
 Terminal 3:
 
@@ -149,7 +169,7 @@ Expected tools:
 - `export_notes_bundle`
 - server id `fixture-notes-mcp`
 
-## 7. Check AIWatch Alerts
+## 8. Check AIWatch Alerts
 
 Terminal 3:
 

@@ -7,7 +7,7 @@ AIWatch observes MCP traffic routed through the AIWatch wrapper. This checklist 
 - Python 3.12 available as `py -3.12`
 - Backend dependencies installed
 - Frontend dependencies installed with `npm install` if needed
-- For the real MCP package smoke: Node/npm `npx` on PATH
+- For the real MCP package smokes: Node/npm `npx` on PATH
 
 ## A. Fast Local Dashboard Demo
 
@@ -339,7 +339,7 @@ py -3.12 eval\run_eval.py
 Current expected results:
 
 ```text
-pytest: 99 passed
+pytest: 107 passed
 eval: 39/39 passed
 false positives: none
 false negatives: none

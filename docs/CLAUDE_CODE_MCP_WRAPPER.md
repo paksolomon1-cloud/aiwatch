@@ -5,6 +5,7 @@ This is an experimental local stdio MCP wrapper path.
 It does **not** add generic Claude Code monitoring.
 It does **not** monitor prompts, shell commands, file edits, or other non-MCP Claude Code actions.
 It only shows how AIWatch can observe MCP traffic routed through the AIWatch stdio wrapper.
+The manual Claude Code runtime smoke is distinct from the local fixture and real-package smoke scripts: those scripts validate wrapper behavior without proving that Claude Code loaded a project MCP config.
 
 ## What This Observes
 
@@ -58,7 +59,7 @@ Pass `--session-id` explicitly when you want repeatable demo grouping.
 
 Example file:
 
-- [claude-code-aiwatch-mcp.example.json](</C:/Users/pakso/Desktop/aiwatch/docs/examples/claude-code-aiwatch-mcp.example.json>)
+- [claude-code-aiwatch-mcp.example.json](examples/claude-code-aiwatch-mcp.example.json)
 
 Example contents:
 
@@ -88,6 +89,7 @@ Example contents:
 This sample uses the existing no-dependency realistic local fixture server so the wrapper path is testable without Claude Code and without external services.
 
 The sample intentionally omits `--session-id`, so repeated Claude Code launches are grouped into separate AIWatch sessions by default.
+If `${CLAUDE_PROJECT_DIR:-.}` is not expanded by your Claude Code environment on Windows, replace those entries with absolute paths such as `C:/Users/pakso/Desktop/aiwatch/backend/scripts/aiwatch_stdio_tap.py`.
 
 On Windows, the real MCP server command after `--` must include the Python launcher before the `.py` script. The sample uses the correct shape:
 
@@ -127,9 +129,10 @@ If `7330` is occupied, use another port and set `AIWATCH_BACKEND_URL` in the Cla
 
 1. Put a project-scoped `.mcp.json` in the repo root using the sample shape above.
 2. Make sure the backend URL is reachable.
-3. Launch Claude Code in the project.
-4. When Claude Code connects to the configured MCP server, the real fixture server is launched behind `aiwatch_stdio_tap.py`.
-5. AIWatch forwards the stdio traffic and captures `tools/list`.
+3. Run `py -3.12 backend\scripts\aiwatch.py doctor` from the repo root and confirm `aiwatch-fixture-notes` is `wrapped_by_aiwatch`.
+4. Launch Claude Code in the project.
+5. When Claude Code connects to the configured MCP server, the real fixture server is launched behind `aiwatch_stdio_tap.py`.
+6. AIWatch forwards the stdio traffic and captures `tools/list`.
 
 ## How To Verify After Claude Code Launches The Server
 

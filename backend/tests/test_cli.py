@@ -12,6 +12,7 @@ from app.cli import (
     format_doctor_results_json,
     format_table,
     handle_demo_seed,
+    inspect_mcp_config_file,
     inspect_mcp_configs,
 )
 
@@ -115,6 +116,17 @@ def test_doctor_detects_wrapped_mcp_server(tmp_path: Path) -> None:
 
     [result] = inspect_mcp_configs(tmp_path)
 
+    assert result.server_name == "aiwatch-fixture-notes"
+    assert result.status == "wrapped_by_aiwatch"
+    assert result.reason == "uses aiwatch_stdio_tap.py with -- upstream separator"
+
+
+def test_doctor_detects_claude_code_example_as_wrapped() -> None:
+    example_path = Path(__file__).resolve().parents[2] / "docs" / "examples" / "claude-code-aiwatch-mcp.example.json"
+
+    [result] = inspect_mcp_config_file(example_path)
+
+    assert result.config_path == example_path
     assert result.server_name == "aiwatch-fixture-notes"
     assert result.status == "wrapped_by_aiwatch"
     assert result.reason == "uses aiwatch_stdio_tap.py with -- upstream separator"
@@ -295,6 +307,25 @@ def test_doctor_warns_when_aiwatch_tap_is_missing_upstream_separator(tmp_path: P
     assert result.status == "unknown"
     assert result.reason == "references aiwatch_stdio_tap.py but is missing -- upstream separator"
     assert result.advice == "add -- before the real upstream MCP server command"
+
+
+def test_doctor_warns_when_separator_appears_before_aiwatch_tap(tmp_path: Path) -> None:
+    _write_mcp_config(
+        tmp_path / ".mcp.json",
+        {
+            "mcpServers": {
+                "misordered-wrapper": {
+                    "command": "py",
+                    "args": ["--", "-3.12", "backend/scripts/aiwatch_stdio_tap.py", "py", "server.py"],
+                }
+            }
+        },
+    )
+
+    [result] = inspect_mcp_configs(tmp_path)
+
+    assert result.status == "unknown"
+    assert result.reason == "references aiwatch_stdio_tap.py but is missing -- upstream separator"
 
 
 def test_demo_seed_reports_disabled_dev_endpoints(monkeypatch, capsys) -> None:

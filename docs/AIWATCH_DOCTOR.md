@@ -41,14 +41,14 @@ It does not scan the rest of the machine.
 
 ## Statuses
 
-- `wrapped_by_aiwatch`: the server references `aiwatch_stdio_tap.py` and includes a `--` separator before the upstream MCP server command.
+- `wrapped_by_aiwatch`: the server references `aiwatch_stdio_tap.py` and includes a `--` separator after the wrapper arguments and before the upstream MCP server command.
 - `not_wrapped`: the server appears to launch an MCP server directly.
 - `invalid_config`: the JSON or server entry is malformed enough that AIWatch cannot classify it.
 - `unknown`: the server references `aiwatch_stdio_tap.py`, but the wrapper shape is incomplete or ambiguous.
 
 ## What Wrapped Means
 
-A server is classified as wrapped when the command/args reference `aiwatch_stdio_tap.py` and the args contain `--` before the real upstream server command.
+A server is classified as wrapped when the command/args reference `aiwatch_stdio_tap.py` and the args contain `--` after the wrapper path and before the real upstream server command.
 
 Example shape:
 
@@ -56,6 +56,7 @@ Example shape:
 {
   "mcpServers": {
     "aiwatch-fixture-notes": {
+      "type": "stdio",
       "command": "py",
       "args": [
         "-3.12",

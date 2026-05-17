@@ -91,6 +91,18 @@ def _contains_aiwatch_tap(value: object) -> bool:
     return isinstance(value, str) and "aiwatch_stdio_tap.py" in value.replace("\\", "/")
 
 
+def _has_upstream_separator_after_tap(command_has_tap: bool, args: list[str]) -> bool:
+    if command_has_tap:
+        return "--" in args
+
+    tap_indexes = [index for index, arg in enumerate(args) if _contains_aiwatch_tap(arg)]
+    if not tap_indexes:
+        return False
+
+    last_tap_index = max(tap_indexes)
+    return any(index > last_tap_index and arg == "--" for index, arg in enumerate(args))
+
+
 def _is_python_command(value: object) -> bool:
     if not isinstance(value, str) or not value:
         return False
@@ -145,7 +157,7 @@ def _classify_mcp_server(config_path: Path, server_name: str, server_config: obj
 
     command_has_tap = _contains_aiwatch_tap(command)
     args_have_tap = any(_contains_aiwatch_tap(arg) for arg in args)
-    has_separator = "--" in args
+    has_separator = _has_upstream_separator_after_tap(command_has_tap, args)
 
     if (command_has_tap or (_is_python_command(command) and args_have_tap) or args_have_tap) and has_separator:
         return DoctorServerResult(
