@@ -8,7 +8,6 @@ import re
 import subprocess
 import sys
 import threading
-from collections import OrderedDict
 import urllib.error
 import urllib.request
 import uuid
@@ -21,11 +20,12 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.frame_log import DEFAULT_FRAME_LOG_PATH, append_frame_log, build_frame_log_entry
 from app.credential_redaction import redact_json_like
-from app.mcp_normalizer import normalize_tools_call_frame, normalize_tools_list_frame
+from app.mcp_frame_observer import DEFAULT_MAX_PENDING_REQUEST_METHODS, McpFrameObserver
+from app.schemas import AgentEvent
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:7330"
 MAX_FRAME_BYTES = 1024 * 1024
-MAX_PENDING_REQUEST_METHODS = 1024
+MAX_PENDING_REQUEST_METHODS = DEFAULT_MAX_PENDING_REQUEST_METHODS
 UPSTREAM_WAIT_TIMEOUT_SECONDS = 10
 UPSTREAM_TERMINATE_TIMEOUT_SECONDS = 1
 _SESSION_SERVER_ID_PATTERN = re.compile(r"[^A-Za-z0-9_-]+")
@@ -44,20 +44,6 @@ def _generate_session_id(server_id: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     suffix = uuid.uuid4().hex[:8]
     return f"stdio-{_sanitize_session_component(server_id)}-{timestamp}-{suffix}"
-
-
-def _request_id_key(value: Any) -> tuple[str, Any] | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return ("str", value)
-    if isinstance(value, bool):
-        return ("bool", value)
-    if isinstance(value, int):
-        return ("int", value)
-    if isinstance(value, float):
-        return ("float", value)
-    return (type(value).__name__, repr(value))
 
 
 def _raw_line_size(raw_line: bytes | str) -> int:
@@ -147,17 +133,6 @@ def _write_upstream_line(stdin: Any, line: str) -> None:
         stdin.write(line)
 
 
-def _remember_request_method(
-    request_methods: OrderedDict[tuple[str, Any], str],
-    request_id_key: tuple[str, Any],
-    request_method: str,
-) -> None:
-    request_methods[request_id_key] = request_method
-    request_methods.move_to_end(request_id_key)
-    while len(request_methods) > MAX_PENDING_REQUEST_METHODS:
-        request_methods.popitem(last=False)
-
-
 def _cleanup_upstream(upstream: subprocess.Popen[Any]) -> None:
     try:
         upstream.wait(timeout=UPSTREAM_WAIT_TIMEOUT_SECONDS)
@@ -199,47 +174,7 @@ def _post_event(backend_url: str, event_payload: dict[str, Any]) -> dict[str, An
         return json.loads(response.read().decode("utf-8"))
 
 
-def _ingest_tools_list(
-    *,
-    backend_url: str,
-    frame: dict[str, Any],
-    server_id: str,
-    session_id: str,
-    agent_id: str,
-    request_method: str | None,
-) -> tuple[int, int]:
-    events = normalize_tools_list_frame(
-        frame=frame,
-        server_id=server_id,
-        session_id=session_id,
-        agent_id=agent_id,
-        request_method=request_method,
-    )
-    if not events:
-        return (0, 0)
-
-    total_alerts = 0
-    for event in events:
-        response = _post_event(backend_url, event.model_dump(mode="json"))
-        total_alerts += int(response.get("alerts_created", 0))
-
-    return (len(events), total_alerts)
-
-
-def _ingest_tools_call(
-    *,
-    backend_url: str,
-    frame: dict[str, Any],
-    server_id: str,
-    session_id: str,
-    agent_id: str,
-) -> tuple[int, int]:
-    events = normalize_tools_call_frame(
-        frame=frame,
-        server_id=server_id,
-        session_id=session_id,
-        agent_id=agent_id,
-    )
+def _post_observed_events(*, backend_url: str, events: Sequence[AgentEvent]) -> tuple[int, int]:
     if not events:
         return (0, 0)
 
@@ -265,8 +200,12 @@ def run_tap(
     if session_id is None:
         _stderr(f"[aiwatch] generated session_id={resolved_session_id}")
 
-    request_methods: OrderedDict[tuple[str, Any], str] = OrderedDict()
-    request_methods_lock = threading.Lock()
+    observer = McpFrameObserver(
+        server_id=server_id,
+        session_id=resolved_session_id,
+        agent_id=agent_id,
+        max_pending_request_methods=MAX_PENDING_REQUEST_METHODS,
+    )
     backend_unavailable_logged = False
     server_reader_errors: list[BaseException] = []
     upstream_command = list(server_argv)
@@ -302,12 +241,12 @@ def run_tap(
                 else:
                     parsed_server = _parse_frame(server_line, direction="server_to_client")
                 response_method: str | None = None
+                observed_server_events: Sequence[AgentEvent] = []
 
                 if parsed_server is not None:
-                    response_id_key = _request_id_key(parsed_server.get("id"))
-                    if response_id_key is not None:
-                        with request_methods_lock:
-                            response_method = request_methods.pop(response_id_key, None)
+                    observed_server = observer.observe_server_frame(parsed_server)
+                    response_method = observed_server.method
+                    observed_server_events = observed_server.events
 
                     if log_raw_frames:
                         append_frame_log(
@@ -330,13 +269,9 @@ def run_tap(
                     continue
 
                 try:
-                    tool_count, alerts_created = _ingest_tools_list(
+                    tool_count, alerts_created = _post_observed_events(
                         backend_url=backend_url,
-                        frame=parsed_server,
-                        server_id=server_id,
-                        session_id=resolved_session_id,
-                        agent_id=agent_id,
-                        request_method=response_method,
+                        events=observed_server_events,
                     )
                 except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
                     if not backend_unavailable_logged:
@@ -368,12 +303,11 @@ def run_tap(
             else:
                 parsed_client = _parse_frame(client_line, direction="client_to_server")
             client_method: str | None = None
+            observed_client_events: Sequence[AgentEvent] = []
             if parsed_client is not None:
-                client_method = parsed_client.get("method") if isinstance(parsed_client.get("method"), str) else None
-                client_id_key = _request_id_key(parsed_client.get("id"))
-                if client_method is not None and client_id_key is not None:
-                    with request_methods_lock:
-                        _remember_request_method(request_methods, client_id_key, client_method)
+                observed_client = observer.observe_client_frame(parsed_client)
+                client_method = observed_client.method
+                observed_client_events = observed_client.events
 
             if log_raw_frames and parsed_client is not None:
                 append_frame_log(
@@ -395,12 +329,9 @@ def run_tap(
                 continue
 
             try:
-                tool_call_count, alerts_created = _ingest_tools_call(
+                tool_call_count, alerts_created = _post_observed_events(
                     backend_url=backend_url,
-                    frame=parsed_client,
-                    server_id=server_id,
-                    session_id=resolved_session_id,
-                    agent_id=agent_id,
+                    events=observed_client_events,
                 )
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
                 if not backend_unavailable_logged:
