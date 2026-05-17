@@ -1,0 +1,11 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+*.log
+.venv/
+node_modules/
+dist/
+frontend/dist/
+frontend/.ui-smoke/
+.env
+.env.*
