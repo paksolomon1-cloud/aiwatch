@@ -798,13 +798,85 @@ input {
   gap: 0.35rem;
 }
 
+.audit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.audit-summary-card {
+  min-width: 0;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(77, 200, 255, 0.16);
+  background: rgba(7, 16, 27, 0.76);
+  padding: 0.78rem;
+}
+
+.audit-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.audit-summary-card strong {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.audit-summary-wide {
+  grid-column: span 2;
+}
+
+.audit-correlation-card {
+  gap: 0.65rem;
+}
+
+.incident-list,
+.incident-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.incident-card {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(30, 49, 71, 0.9);
+  background: rgba(8, 15, 26, 0.72);
+  padding: 0.85rem;
+}
+
+.incident-elevated {
+  border-color: rgba(255, 159, 67, 0.3);
+  box-shadow: inset 3px 0 0 rgba(255, 159, 67, 0.72);
+}
+
+.incident-record {
+  display: grid;
+  grid-template-columns: max-content minmax(8rem, 0.38fr) max-content minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  border-top: 1px solid rgba(30, 49, 71, 0.7);
+  padding-top: 0.65rem;
+  color: var(--muted);
+}
+
+.incident-summary {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .audit-counts {
   margin-top: 0;
   justify-content: flex-end;
 }
 
 .audit-table {
-  min-width: 72rem;
+  min-width: 86rem;
 }
 
 .audit-table th:nth-child(1),
@@ -827,6 +899,11 @@ input {
 
 .audit-table th:nth-child(7),
 .audit-table td:nth-child(7) {
+  min-width: 14rem;
+}
+
+.audit-table th:nth-child(8),
+.audit-table td:nth-child(8) {
   min-width: 24rem;
 }
 
@@ -1064,7 +1141,16 @@ pre {
   .detail-grid,
   .severity-grid,
   .proof-grid,
+  .audit-summary-grid,
   .credential-finding {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-summary-wide {
+    grid-column: span 1;
+  }
+
+  .incident-record {
     grid-template-columns: 1fr;
   }
 

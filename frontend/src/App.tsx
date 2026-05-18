@@ -5,6 +5,7 @@ import {
   BACKEND_OFFLINE_MESSAGE,
   clearDevData,
   getAlerts,
+  getAuditSummary,
   getAuditTimeline,
   getEvents,
   getHealth,
@@ -18,6 +19,7 @@ import {
 import type {
   AgentEvent,
   Alert,
+  AuditSummaryResponse,
   AuditTimelineRecord,
   DemoSeedResponse,
   EventIngestResponse,
@@ -36,6 +38,13 @@ interface SessionSummary {
   alertCount: number
   latestAt: string
   highestSeverity: Severity | 'none'
+}
+
+interface AuditIncidentGroup {
+  key: string
+  label: 'Cross-layer activity' | 'Elevated cross-layer risk'
+  latestAt: string | null
+  records: AuditTimelineRecord[]
 }
 
 interface ReplayLoadOptions {
@@ -111,6 +120,82 @@ function getAuditRecordKey(record: AuditTimelineRecord, index: number): string {
   ]
     .filter((part) => part !== undefined && part !== null && part !== '')
     .join(':')
+}
+
+function getAuditCorrelationKey(record: AuditTimelineRecord): string | null {
+  const candidate =
+    record.correlation_id ??
+    record.trace_id ??
+    record.session_id ??
+    record.request_id ??
+    null
+
+  return typeof candidate === 'string' && candidate.trim() ? candidate : null
+}
+
+function getAuditActionText(record: AuditTimelineRecord): string {
+  return record.action ?? record.decision ?? 'n/a'
+}
+
+function isLobsterTrapRiskRecord(record: AuditTimelineRecord): boolean {
+  if (record.source !== 'lobstertrap') {
+    return false
+  }
+
+  const action = String(record.action ?? '').toUpperCase()
+  const decision = String(record.decision ?? '').toLowerCase()
+  return (
+    ['DENY', 'HUMAN_REVIEW', 'QUARANTINE'].includes(action) ||
+    ['block', 'review', 'quarantine'].includes(decision)
+  )
+}
+
+function buildAuditIncidentGroups(records: AuditTimelineRecord[]): AuditIncidentGroup[] {
+  const groupedRecords = new Map<string, AuditTimelineRecord[]>()
+
+  for (const record of records) {
+    const key = getAuditCorrelationKey(record)
+    if (!key) {
+      continue
+    }
+
+    const existing = groupedRecords.get(key) ?? []
+    existing.push(record)
+    groupedRecords.set(key, existing)
+  }
+
+  const incidentGroups: AuditIncidentGroup[] = []
+
+  for (const [key, groupRecords] of groupedRecords.entries()) {
+    const sources = new Set(groupRecords.map((record) => record.source))
+    if (!sources.has('aiwatch') || !sources.has('lobstertrap')) {
+      continue
+    }
+
+    const hasLobsterTrapRisk = groupRecords.some(isLobsterTrapRiskRecord)
+    const latestAt =
+      groupRecords
+        .map((record) => record.timestamp ?? record.created_at ?? null)
+        .filter((value): value is string => Boolean(value))
+        .sort((left, right) => new Date(right).valueOf() - new Date(left).valueOf())[0] ?? null
+
+    incidentGroups.push({
+      key,
+      label: hasLobsterTrapRisk ? 'Elevated cross-layer risk' : 'Cross-layer activity',
+      latestAt,
+      records: [...groupRecords].sort(
+        (left, right) =>
+          new Date(right.timestamp ?? right.created_at ?? 0).valueOf() -
+          new Date(left.timestamp ?? left.created_at ?? 0).valueOf(),
+      ),
+    })
+  }
+
+  return incidentGroups.sort((left, right) => {
+    const leftTime = left.latestAt ? new Date(left.latestAt).valueOf() : 0
+    const rightTime = right.latestAt ? new Date(right.latestAt).valueOf() : 0
+    return rightTime - leftTime || left.key.localeCompare(right.key)
+  })
 }
 
 function getRuleFamily(ruleId: string): 'code' | 'mcp' | 'intent' | 'other' {
@@ -387,6 +472,7 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [tools, setTools] = useState<ToolFingerprint[]>([])
   const [auditTimeline, setAuditTimeline] = useState<AuditTimelineRecord[]>([])
+  const [auditSummary, setAuditSummary] = useState<AuditSummaryResponse | null>(null)
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [sessionInput, setSessionInput] = useState('')
@@ -408,6 +494,7 @@ function App() {
   const recentAlerts = alerts.slice(0, 5)
   const lobstertrapAuditCount = auditTimeline.filter((record) => record.source === 'lobstertrap').length
   const aiwatchAuditCount = auditTimeline.filter((record) => record.source === 'aiwatch').length
+  const auditIncidentGroups = buildAuditIncidentGroups(auditTimeline)
   const toolNameServerMap = buildToolNameServerMap(tools)
   const shadowedToolNames = [...toolNameServerMap.entries()]
     .filter(([, servers]) => servers.length > 1)
@@ -432,12 +519,13 @@ function App() {
     setErrorMessage(null)
 
     try {
-      const [nextHealth, nextEvents, nextAlerts, nextTools, nextAuditTimeline] = await Promise.all([
+      const [nextHealth, nextEvents, nextAlerts, nextTools, nextAuditTimeline, nextAuditSummary] = await Promise.all([
         getHealth(),
         getEvents(),
         getAlerts(),
         getTools(),
         getAuditTimeline(),
+        getAuditSummary(),
       ])
 
       setHealth(nextHealth)
@@ -457,6 +545,7 @@ function App() {
         ),
       )
       setAuditTimeline(nextAuditTimeline)
+      setAuditSummary(nextAuditSummary)
     } catch (error) {
       const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
       setErrorMessage(message)
@@ -465,6 +554,7 @@ function App() {
       setAlerts([])
       setTools([])
       setAuditTimeline([])
+      setAuditSummary(null)
       setSelectedAlert(null)
       setSelectedTool(null)
       setSelectedToolId('')
@@ -1100,6 +1190,15 @@ function App() {
   }
 
   function renderUnifiedAuditTimeline() {
+    const summaryCards = [
+      ['Total records', auditSummary?.total_records ?? auditTimeline.length],
+      ['AIWatch MCP', auditSummary?.aiwatch_mcp_records ?? aiwatchAuditCount],
+      ['Lobster Trap', auditSummary?.lobstertrap_records ?? lobstertrapAuditCount],
+      ['Deny', auditSummary?.deny_count ?? 0],
+      ['Review / quarantine', auditSummary?.human_review_quarantine_count ?? 0],
+      ['Redacted', auditSummary?.redacted_count ?? auditTimeline.filter((record) => record.redacted).length],
+    ]
+
     return (
       <div className="page-grid audit-grid">
         <section className="panel audit-panel">
@@ -1116,12 +1215,76 @@ function App() {
 
           <div className="info-card audit-boundary-card">
             <p className="muted-copy small-copy">
-              AIWatch MCP records + Lobster Trap audit records in one local timeline.
+              AIWatch MCP records + Lobster Trap prompt/response audit records in one local timeline.
               Lobster Trap covers prompt/response audit logs; AIWatch covers routed MCP tool traffic.
             </p>
             <p className="muted-copy small-copy">
-              Local integration only, not TerraFabric deployment or a Veea cloud control plane.
+              Local integration, not TerraFabric deployment.
             </p>
+          </div>
+
+          <div className="audit-summary-grid">
+            {summaryCards.map(([label, value]) => (
+              <div key={label} className="audit-summary-card">
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+            <div className="audit-summary-card audit-summary-wide">
+              <span>Most recent</span>
+              <strong>{formatTimestamp(auditSummary?.most_recent_timestamp)}</strong>
+            </div>
+          </div>
+
+          <div className="info-card audit-correlation-card">
+            <div className="section-heading compact-heading">
+              <div>
+                <span className="panel-label">Local cross-layer audit correlation</span>
+                <h3>{auditIncidentGroups.length} grouped incidents</h3>
+              </div>
+            </div>
+            <p className="muted-copy small-copy">
+              Grouped by local session/request metadata when present.
+            </p>
+
+            {auditIncidentGroups.length === 0 ? (
+              <p className="empty-state">
+                No cross-layer groups yet. Seed AIWatch MCP activity and ingest the Lobster Trap demo audit fixture to show correlated local audit records.
+              </p>
+            ) : (
+              <div className="incident-list">
+                {auditIncidentGroups.map((group) => (
+                  <article
+                    key={group.key}
+                    className={`incident-card ${
+                      group.label === 'Elevated cross-layer risk' ? 'incident-elevated' : ''
+                    }`}
+                  >
+                    <div className="timeline-title">
+                      <div>
+                        <strong>{group.label}</strong>
+                        <p className="muted-copy small-copy mono-inline wrap-anywhere">{group.key}</p>
+                      </div>
+                      <span className="live-count-chip">{formatTimestamp(group.latestAt)}</span>
+                    </div>
+                    <div className="incident-record-list">
+                      {group.records.slice(0, 4).map((record, index) => (
+                        <div key={getAuditRecordKey(record, index)} className="incident-record">
+                          <span className={`source-badge source-${record.source}`}>
+                            {formatAuditSource(record.source)}
+                          </span>
+                          <span>{formatAuditLayer(record.layer)}</span>
+                          <span className="decision-pill">{getAuditActionText(record)}</span>
+                          <span className="incident-summary">
+                            {record.summary ?? toSentenceCase(record.event_type)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
 
           {auditTimeline.length === 0 ? (
@@ -1139,13 +1302,15 @@ function App() {
                     <th>Decision</th>
                     <th>Rule</th>
                     <th>Evidence</th>
+                    <th>Correlation</th>
                     <th>Summary</th>
                   </tr>
                 </thead>
                 <tbody>
                   {auditTimeline.map((record, index) => {
                     const ruleId = record.rule_id ?? 'n/a'
-                    const decision = record.decision ?? record.action ?? 'n/a'
+                    const decision = getAuditActionText(record)
+                    const correlationId = getAuditCorrelationKey(record) ?? 'n/a'
 
                     return (
                       <tr key={getAuditRecordKey(record, index)}>
@@ -1167,6 +1332,7 @@ function App() {
                             {record.redacted ? 'redacted' : 'not marked'}
                           </span>
                         </td>
+                        <td className="mono-inline wrap-anywhere">{correlationId}</td>
                         <td>{record.summary ?? toSentenceCase(record.event_type)}</td>
                       </tr>
                     )
@@ -1820,7 +1986,7 @@ function App() {
             </div>
             <div className="proof-grid">
               <div>
-                <strong>171</strong>
+                <strong>175</strong>
                 <span>backend tests passing</span>
               </div>
               <div>

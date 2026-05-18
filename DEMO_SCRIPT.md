@@ -184,7 +184,7 @@ Key message:
 - missing session replay returns `404`
 - React dashboard
 - deterministic local eval harness
-- 171 pytest passing
+- 175 pytest passing
 - 43/43 eval passing
 
 ## Claims Not To Make

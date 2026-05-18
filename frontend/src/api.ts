@@ -1,6 +1,7 @@
 import type {
   AgentEvent,
   Alert,
+  AuditSummaryResponse,
   AuditTimelineRecord,
   DemoSeedResponse,
   EventIngestResponse,
@@ -71,6 +72,10 @@ export function getTools(): Promise<ToolFingerprint[]> {
 
 export function getAuditTimeline(limit = 100): Promise<AuditTimelineRecord[]> {
   return request<AuditTimelineRecord[]>(`/v1/audit/timeline?limit=${encodeURIComponent(String(limit))}`)
+}
+
+export function getAuditSummary(): Promise<AuditSummaryResponse> {
+  return request<AuditSummaryResponse>('/v1/audit/summary')
 }
 
 export function getTool(fingerprintId: string): Promise<ToolFingerprint> {

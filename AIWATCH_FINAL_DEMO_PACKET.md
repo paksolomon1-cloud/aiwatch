@@ -18,7 +18,7 @@ Phase 0/1 technical bridge: AIWatch can export MCP-layer alerts and an MCP obser
 
 Phase 2 local merge artifact: AIWatch can merge its local MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file into a unified Veea-style audit timeline. This is local export/merge interop, not a shared event bus and not TerraFabric deployment.
 
-Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a local SQLite-backed unified audit timeline and show those records in the AIWatch dashboard beside AIWatch MCP-layer records. This is local integration, not a Veea cloud control plane, and AIWatch still does not inspect prompts directly.
+Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a local SQLite-backed unified audit timeline and show those records in the AIWatch dashboard beside AIWatch MCP-layer records. The Unified Audit tab includes local risk counts and cross-layer grouping when shared session/request metadata is present. This is local integration, not a Veea cloud control plane, and AIWatch still does not inspect prompts directly.
 
 ## 3. 5-minute demo script
 
@@ -81,6 +81,18 @@ Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a
 3. Say:
 
 `Known detected credential-shaped values are redacted on tested backend, API, and CLI surfaces.`
+
+### Show local unified audit
+
+1. In the backend directory, ingest the bundled Lobster Trap sample:
+
+`py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330`
+
+2. Open the `Unified Audit` tab.
+3. Point to the local risk summary and cross-layer grouping.
+4. Say:
+
+`AIWatch MCP records + Lobster Trap prompt/response audit records are grouped locally when they share session/request metadata. This is local integration, not TerraFabric deployment.`
 
 ### Close with proof points
 
@@ -155,7 +167,7 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `171 passed`
+- tests: `175 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
 - second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
@@ -236,7 +248,7 @@ Does not catch:
 
 ## 7. Proof points
 
-- `pytest`: `171 passed`
+- `pytest`: `175 passed`
 - `eval`: `43/43`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke

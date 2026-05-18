@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 from app.cli import build_parser as build_cli_parser, handle_alerts
 from app.main import app
 from app.storage import clear_db, init_db
+from app.veea_audit import read_jsonl_objects
+
+DEMO_LOBSTERTRAP_AUDIT_PATH = Path(__file__).resolve().parents[1] / "demo" / "lobstertrap-audit-sample.jsonl"
 
 
 def _configure_test_db(monkeypatch, tmp_path: Path) -> Path:
@@ -820,6 +823,103 @@ def test_audit_timeline_includes_aiwatch_and_lobstertrap_records(monkeypatch, tm
     assert ("lobstertrap", "llm_prompt_response") in {
         (record["source"], record["layer"]) for record in records
     }
+
+    clear_db()
+
+
+def test_demo_lobstertrap_fixture_ingests_successfully(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    records = read_jsonl_objects(DEMO_LOBSTERTRAP_AUDIT_PATH)
+
+    with TestClient(app) as client:
+        response = client.post("/v1/integrations/lobstertrap/audit", json={"records": records})
+        timeline_response = client.get("/v1/audit/timeline")
+
+    assert response.status_code == 200
+    assert response.json()["accepted"] == 3
+    assert response.json()["rejected"] == 0
+    assert len(response.json()["stored_record_ids"]) == 3
+    assert {
+        record["request_id"]
+        for record in timeline_response.json()
+        if record["source"] == "lobstertrap"
+    } == {
+        "lt-demo-req-deny-001",
+        "lt-demo-req-allow-001",
+        "lt-demo-req-review-001",
+    }
+
+    clear_db()
+
+
+def test_audit_summary_counts_aiwatch_lobstertrap_risk_and_redaction(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    records = read_jsonl_objects(DEMO_LOBSTERTRAP_AUDIT_PATH)
+    mcp_event = {
+        "event_id": "api-summary-aiwatch-event",
+        "timestamp": "2026-05-18T12:03:00Z",
+        "source": "mcp",
+        "agent_id": "mcp-client-demo",
+        "session_id": "demo-benign-mcp",
+        "intent_text": "Register available note tools.",
+        "action_type": "tool_register",
+        "action_params": {
+            "server_id": "summary-notes-mcp",
+            "tool_name": "list_notes",
+            "description": "Lists notes for local audit review.",
+        },
+    }
+
+    with TestClient(app) as client:
+        event_response = client.post("/v1/events", json=mcp_event)
+        ingest_response = client.post("/v1/integrations/lobstertrap/audit", json={"records": records})
+        summary_response = client.get("/v1/audit/summary")
+
+    assert event_response.status_code == 200
+    assert ingest_response.status_code == 200
+    summary = summary_response.json()
+    assert summary_response.status_code == 200
+    assert summary["total_records"] == 4
+    assert summary["aiwatch_mcp_records"] == 1
+    assert summary["lobstertrap_records"] == 3
+    assert summary["deny_count"] == 1
+    assert summary["human_review_quarantine_count"] == 1
+    assert summary["redacted_count"] == 3
+    assert summary["most_recent_timestamp"] == "2026-05-18T12:06:00Z"
+    assert {
+        (item["source"], item["layer"], item["count"])
+        for item in summary["source_layer_breakdown"]
+    } == {
+        ("aiwatch", "mcp_tool", 1),
+        ("lobstertrap", "llm_prompt_response", 3),
+    }
+
+    clear_db()
+
+
+def test_lobstertrap_correlation_fields_are_preserved_in_timeline(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/integrations/lobstertrap/audit",
+            json={
+                **_lobstertrap_audit_record(request_id="req-correlated-api"),
+                "agent_id": "correlated-agent",
+                "session_id": "correlated-session",
+                "trace_id": "trace-correlated-session",
+                "correlation_id": "correlation-demo-001",
+            },
+        )
+        timeline_response = client.get("/v1/audit/timeline")
+
+    assert response.status_code == 200
+    [record] = timeline_response.json()
+    assert record["request_id"] == "req-correlated-api"
+    assert record["agent_id"] == "correlated-agent"
+    assert record["session_id"] == "correlated-session"
+    assert record["trace_id"] == "trace-correlated-session"
+    assert record["correlation_id"] == "correlation-demo-001"
 
     clear_db()
 

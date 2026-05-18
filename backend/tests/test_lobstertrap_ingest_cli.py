@@ -99,3 +99,39 @@ def test_ingest_lobstertrap_audit_cli_rejects_nonlocal_backend_url(tmp_path: Pat
 
     captured = capsys.readouterr()
     assert "only posts to a local AIWatch backend URL" in captured.err
+
+
+def test_ingest_demo_lobstertrap_audit_cli_posts_bundled_fixture(monkeypatch, capsys) -> None:
+    posted_records: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        posted_records.append(
+            {
+                "path": path,
+                "backend_url": backend_url,
+                "method": method,
+                "body": body,
+            }
+        )
+        return {"accepted": 1, "rejected": 0, "stored_record_ids": [len(posted_records)]}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(
+        [
+            "ingest-demo-lobstertrap-audit",
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert len(posted_records) == 3
+    assert all(record["path"] == "/v1/integrations/lobstertrap/audit" for record in posted_records)
+    assert all(record["method"] == "POST" for record in posted_records)
+    assert [record["body"]["request_id"] for record in posted_records] == [
+        "lt-demo-req-deny-001",
+        "lt-demo-req-allow-001",
+        "lt-demo-req-review-001",
+    ]
+    assert "Ingested 3 Lobster Trap audit records; rejected 0; malformed lines 0; stored IDs [1, 2, 3]." in captured.out

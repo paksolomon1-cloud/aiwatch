@@ -580,23 +580,25 @@ def list_tools() -> list[ToolFingerprint]:
     return [_tool_fingerprint_from_row(row) for row in rows]
 
 
-def list_audit_records(limit: int = 100) -> list[dict[str, Any]]:
-    safe_limit = min(max(limit, 1), 1000)
+def list_audit_records(limit: int | None = 100) -> list[dict[str, Any]]:
+    safe_limit = min(max(limit, 1), 1000) if limit is not None else None
     with _connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT *
-            FROM audit_records
-            ORDER BY COALESCE(timestamp, created_at) DESC,
-                     created_at DESC,
-                     audit_record_id DESC,
-                     source ASC,
-                     layer ASC,
-                     event_type ASC
-            LIMIT ?
-            """,
-            (safe_limit,),
-        ).fetchall()
+        query = """
+        SELECT *
+        FROM audit_records
+        ORDER BY COALESCE(timestamp, created_at) DESC,
+                 created_at DESC,
+                 audit_record_id DESC,
+                 source ASC,
+                 layer ASC,
+                 event_type ASC
+        """
+        params: tuple[object, ...] = ()
+        if safe_limit is not None:
+            query += " LIMIT ?"
+            params = (safe_limit,)
+
+        rows = connection.execute(query, params).fetchall()
     return [_audit_record_from_row(row) for row in rows]
 
 

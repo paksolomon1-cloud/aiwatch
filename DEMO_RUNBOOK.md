@@ -74,7 +74,7 @@ R-MCP-005 is deterministic credential-shaped value detection in MCP tools/call p
 Say:
 
 ```text
-The current proof set is 171 backend tests passing, 43/43 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
+The current proof set is 175 backend tests passing, 43/43 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
 ```
 
 ## Rehearsal Proof Commands
@@ -134,10 +134,16 @@ Get-Content .\veea-unified-timeline.jsonl -TotalCount 10
 Say:
 
 ```text
-This unified file is local export/merge interop. Lobster Trap remains the prompt/response inspection layer; AIWatch remains the routed MCP tool layer. This is not live forwarding, not a shared event bus, not a shared dashboard, and not Lobster Trap ingestion.
+This unified file is local export/merge interop. Lobster Trap remains the prompt/response inspection layer; AIWatch remains the routed MCP tool layer. This file path is separate from the local live ingestion path below; it is not forwarding and not a shared event bus.
 ```
 
-To ingest a Lobster Trap audit file into the local AIWatch backend and show it in the dashboard's Unified Audit tab:
+For a deterministic demo fixture, ingest the bundled Lobster Trap sample into the local AIWatch backend:
+
+```powershell
+py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330
+```
+
+To ingest a real local Lobster Trap audit file into the local AIWatch backend and show it in the dashboard's Unified Audit tab:
 
 ```powershell
 py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
@@ -154,6 +160,8 @@ Say:
 ```text
 This is local live audit ingestion. It does not make AIWatch inspect prompts directly, does not make Lobster Trap inspect MCP traffic, and does not use TerraFabric infrastructure.
 ```
+
+The dashboard's Unified Audit tab also reads `GET /v1/audit/summary` for local risk counts and groups records by local session/request metadata when present. If the seeded AIWatch MCP records and bundled Lobster Trap sample share a session ID, the tab labels that group as local cross-layer audit correlation.
 
 Say:
 
@@ -173,7 +181,7 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- `171 passed`
+- `175 passed`
 - eval total cases: `39`
 - eval passed cases: `39`
 - false positives: none

@@ -33,6 +33,7 @@ DEV_ENDPOINTS_DISABLED_MESSAGE = (
     "AIWATCH_DEV_MODE=true for local demos."
 )
 MCP_CONFIG_CANDIDATES = (Path(".mcp.json"), Path(".cursor") / "mcp.json")
+DEMO_LOBSTERTRAP_AUDIT_PATH = ROOT_DIR / "demo" / "lobstertrap-audit-sample.jsonl"
 
 
 @dataclass(frozen=True)
@@ -373,6 +374,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ingest_lobstertrap_parser.set_defaults(handler=handle_ingest_lobstertrap_audit)
 
+    ingest_demo_lobstertrap_parser = subparsers.add_parser(
+        "ingest-demo-lobstertrap-audit",
+        help="Ingest the bundled Lobster Trap demo audit fixture into the AIWatch backend.",
+    )
+    ingest_demo_lobstertrap_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    ingest_demo_lobstertrap_parser.set_defaults(handler=handle_ingest_demo_lobstertrap_audit)
+
     return parser
 
 
@@ -620,6 +628,15 @@ def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
         f"stored IDs {stored_record_ids}."
     )
     return 0
+
+
+def handle_ingest_demo_lobstertrap_audit(args: argparse.Namespace) -> int:
+    demo_args = argparse.Namespace(
+        file=DEMO_LOBSTERTRAP_AUDIT_PATH,
+        backend_url=args.backend_url,
+        follow=False,
+    )
+    return handle_ingest_lobstertrap_audit(demo_args)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -123,9 +123,30 @@ export interface AuditTimelineRecord {
   summary?: string | null
   redacted?: boolean
   request_id?: string | null
+  session_id?: string | null
+  agent_id?: string | null
+  trace_id?: string | null
+  correlation_id?: string | null
   evidence?: Record<string, unknown>
   aiwatch?: Record<string, unknown>
   lobstertrap?: Record<string, unknown>
+}
+
+export interface AuditSourceLayerBreakdown {
+  source: string
+  layer: string
+  count: number
+}
+
+export interface AuditSummaryResponse {
+  total_records: number
+  aiwatch_mcp_records: number
+  lobstertrap_records: number
+  deny_count: number
+  human_review_quarantine_count: number
+  redacted_count: number
+  most_recent_timestamp: string | null
+  source_layer_breakdown: AuditSourceLayerBreakdown[]
 }
 
 export interface DemoSeedItem {

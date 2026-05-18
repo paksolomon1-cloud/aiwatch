@@ -212,6 +212,55 @@ def _sort_audit_timeline_desc(records: list[dict[str, object]]) -> list[dict[str
     return sorted(stable_records, key=_audit_record_timestamp, reverse=True)
 
 
+def _combined_audit_records(*, lobstertrap_limit: int | None = 100) -> list[dict[str, object]]:
+    return [
+        *load_audit_records(limit=lobstertrap_limit),
+        *_api_aiwatch_audit_records(),
+    ]
+
+
+def _is_deny_record(record: dict[str, object]) -> bool:
+    action = str(record.get("action") or "").upper()
+    decision = str(record.get("decision") or "").lower()
+    return action == "DENY" or decision == "block"
+
+
+def _is_human_review_or_quarantine_record(record: dict[str, object]) -> bool:
+    action = str(record.get("action") or "").upper()
+    decision = str(record.get("decision") or "").lower()
+    return action in {"HUMAN_REVIEW", "QUARANTINE"} or decision in {"review", "quarantine"}
+
+
+def _source_layer_breakdown(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    counts: dict[tuple[str, str], int] = {}
+    for record in records:
+        key = (str(record.get("source") or "unknown"), str(record.get("layer") or "unknown"))
+        counts[key] = counts.get(key, 0) + 1
+
+    return [
+        {"source": source, "layer": layer, "count": count}
+        for (source, layer), count in sorted(counts.items())
+    ]
+
+
+def _audit_summary(records: list[dict[str, object]]) -> dict[str, object]:
+    sorted_records = _sort_audit_timeline_desc(records)
+    return {
+        "total_records": len(records),
+        "aiwatch_mcp_records": sum(
+            1 for record in records if record.get("source") == "aiwatch" and record.get("layer") == "mcp_tool"
+        ),
+        "lobstertrap_records": sum(1 for record in records if record.get("source") == "lobstertrap"),
+        "deny_count": sum(1 for record in records if _is_deny_record(record)),
+        "human_review_quarantine_count": sum(
+            1 for record in records if _is_human_review_or_quarantine_record(record)
+        ),
+        "redacted_count": sum(1 for record in records if record.get("redacted") is True),
+        "most_recent_timestamp": _audit_record_timestamp(sorted_records[0]) if sorted_records else None,
+        "source_layer_breakdown": _source_layer_breakdown(records),
+    }
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {
@@ -317,11 +366,13 @@ def replay_session(session_id: str) -> dict[str, object]:
 
 @app.get("/v1/audit/timeline")
 def read_audit_timeline(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, object]]:
-    records = [
-        *load_audit_records(limit=limit),
-        *_api_aiwatch_audit_records(),
-    ]
+    records = _combined_audit_records(lobstertrap_limit=limit)
     return _sort_audit_timeline_desc(records)[:limit]
+
+
+@app.get("/v1/audit/summary")
+def read_audit_summary() -> dict[str, object]:
+    return _audit_summary(_combined_audit_records(lobstertrap_limit=None))
 
 
 @app.delete("/v1/dev/clear")

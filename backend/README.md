@@ -35,7 +35,7 @@ py -3.12 eval\run_eval.py
 
 Expected current state:
 
-- pytest: `171` passing tests
+- pytest: `175` passing tests
 - eval: `43/43`
 - core seed: `5 events / 7 alerts`
 - extended seed: `8 events / 10 alerts`

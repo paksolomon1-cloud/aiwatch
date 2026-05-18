@@ -56,6 +56,20 @@ def _pick_string(payload: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
+def _pick_nested_string(payload: dict[str, Any], *keys: str) -> str | None:
+    direct = _pick_string(payload, *keys)
+    if direct:
+        return direct
+
+    for container_key in ("metadata", "declared_headers", "_lobstertrap"):
+        nested = _nested_dict(payload, container_key)
+        nested_value = _pick_string(nested, *keys)
+        if nested_value:
+            return nested_value
+
+    return None
+
+
 def _nested_dict(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     return value if isinstance(value, dict) else {}
@@ -84,6 +98,9 @@ def _safe_lobstertrap_evidence(record: dict[str, Any]) -> dict[str, Any]:
         "declared_headers",
         "mismatches",
         "agent_id",
+        "session_id",
+        "trace_id",
+        "correlation_id",
     ]
     evidence = {key: record[key] for key in evidence_keys if key in record}
 
@@ -217,6 +234,7 @@ def alert_to_veea_audit_envelope(alert: Alert) -> dict[str, Any]:
         "tool_name": evidence.get("tool_name"),
         "session_id": alert.session_id,
         "agent_id": alert.agent_id,
+        "correlation_id": alert.session_id,
         "redacted": redacted,
         "evidence": evidence,
         "aiwatch": {
@@ -237,10 +255,19 @@ def lobstertrap_record_to_veea_audit_envelope(record: dict[str, Any]) -> dict[st
     direction = _pick_string(record, "direction")
     request_id = _pick_string(record, "request_id")
     agent_id = _pick_string(record, "agent_id")
+    session_id = _pick_nested_string(record, "session_id")
+    trace_id = _pick_nested_string(record, "trace_id")
+    correlation_id = _pick_nested_string(record, "correlation_id") or trace_id or session_id or request_id
 
     declared_headers = record.get("declared_headers")
     if agent_id is None and isinstance(declared_headers, dict):
         agent_id = _string_value(declared_headers.get("agent_id"))
+        if session_id is None:
+            session_id = _string_value(declared_headers.get("session_id"))
+        if trace_id is None:
+            trace_id = _string_value(declared_headers.get("trace_id"))
+        if correlation_id is None:
+            correlation_id = _string_value(declared_headers.get("correlation_id"))
 
     envelope: dict[str, Any] = {
         "schema": VEEA_LOBSTERTRAP_AUDIT_SCHEMA,
@@ -254,6 +281,9 @@ def lobstertrap_record_to_veea_audit_envelope(record: dict[str, Any]) -> dict[st
         "summary": _lobstertrap_summary(action, rule_id, direction),
         "request_id": request_id,
         "agent_id": agent_id,
+        "session_id": session_id,
+        "trace_id": trace_id,
+        "correlation_id": correlation_id,
         "redacted": True,
         "evidence": evidence,
         "lobstertrap": {
@@ -288,6 +318,7 @@ def event_to_veea_audit_envelope(event: AgentEvent) -> dict[str, Any]:
         "tool_name": _extract_tool_name(action_params),
         "session_id": event.session_id,
         "agent_id": event.agent_id,
+        "correlation_id": event.session_id,
         "redacted": redacted,
         "evidence": evidence,
         "aiwatch": {

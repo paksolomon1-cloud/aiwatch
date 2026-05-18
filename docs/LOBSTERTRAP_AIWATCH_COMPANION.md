@@ -9,6 +9,7 @@ The current safe story is layered runtime security with local audit interop:
 - AIWatch can export stored MCP-layer alerts, or an MCP observation-plus-alert timeline, as a Veea-style companion audit JSONL artifact.
 - AIWatch can merge its local MCP audit timeline with a Lobster Trap audit JSONL file into a unified Veea-style audit artifact.
 - AIWatch can ingest Lobster Trap JSONL audit logs into a local unified audit timeline shown in the AIWatch dashboard.
+- AIWatch can show local risk counts and cross-layer grouping when AIWatch and Lobster Trap records share session/request metadata.
 - This is local integration, not TerraFabric deployment or a Veea cloud control plane.
 
 ## Baseline vs Extension
@@ -83,6 +84,7 @@ This is a local companion integration path, not TerraFabric deployment or a Veea
 - AIWatch does not send events to Lobster Trap.
 - Lobster Trap can write JSONL audit logs that AIWatch can ingest into its local SQLite audit store.
 - The AIWatch dashboard has a local unified audit view for AIWatch MCP-layer records and ingested Lobster Trap prompt/response-layer records.
+- `GET /v1/audit/summary` returns local counts for total records, source/layer breakdowns, deny/review/quarantine records, redacted records, and the most recent timestamp.
 - There is no shared event bus, shared policy engine, deployed Veea infrastructure, or TerraFabric control plane.
 - AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts and MCP-layer timeline records.
 - AIWatch has a local file-based merge command for combining an AIWatch MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file.
@@ -109,9 +111,9 @@ This is a local companion integration path, not TerraFabric deployment or a Veea
 These are future directions, not current implementation claims:
 
 - define a shared event envelope for prompt-layer and MCP-tool-layer observations
-- add a shared audit timeline that can show Lobster Trap and AIWatch events together
-- correlate prompt-layer policy decisions with MCP tool-layer events when the same agent/session identity is available
-- add a unified dashboard panel after a real shared event path exists
+- extend the local unified timeline into a shared product event model if a real platform event path is implemented
+- deepen prompt-layer and MCP tool-layer correlation when the same agent/session identity is available
+- add shared policy actions only after a real shared policy path exists
 - consider optional policy or blocking actions only after explicit implementation, false-positive review, and validation
 
 ## Phase 0 Interop: AIWatch Veea Audit Export
@@ -281,6 +283,12 @@ cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
 ```
 
+For a deterministic demo without requiring Lobster Trap to be running, ingest the bundled sample:
+
+```powershell
+py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330
+```
+
 To keep reading appended audit lines during a local demo:
 
 ```powershell
@@ -293,7 +301,9 @@ The ingestion path:
 - posts each parsed audit object to the local AIWatch backend
 - stores sanitized normalized records in AIWatch SQLite
 - exposes them through `GET /v1/audit/timeline`
+- exposes local risk counts through `GET /v1/audit/summary`
 - shows them in the AIWatch dashboard as `source: "lobstertrap"` and `layer: "llm_prompt_response"`
+- groups AIWatch MCP records and Lobster Trap prompt/response audit records by local session/request metadata when present
 
 Phase 3 limits:
 
