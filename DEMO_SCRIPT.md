@@ -4,12 +4,13 @@ For the single day-of-demo flow, use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). This fi
 
 ## One-Sentence Pitch
 
-AIWatch is a local MCP observability and security layer. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-shaped MCP tool-call parameters.
+Veea is the broader runtime-security vision; AIWatch is the working MCP-first proof point. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-shaped MCP tool-call parameters.
 
 ## 30-Second Explanation
 
 - MCP gives agents tools.
 - Tool descriptions and tool-call parameters can carry security risk.
+- Veea is the broader product direction; AIWatch is the implemented MCP-focused demo.
 - AIWatch observes MCP traffic routed through its local stdio wrapper/tap path or experimental local HTTP MCP relay.
 - It captures `tools/list` and `tools/call` traffic.
 - It fingerprints tool definitions and keeps registry history.

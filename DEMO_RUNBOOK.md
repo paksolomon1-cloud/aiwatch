@@ -8,6 +8,8 @@ Veea is the broader runtime-security product vision for tool-using AI agents.
 
 AIWatch is the first working implementation, focused on MCP tool traffic. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
+Veea is the broader runtime-security vision; AIWatch is the working MCP-first proof point.
+
 Future Veea direction may include more adapters, richer policy controls, runtime risk scoring, optional blocking, and broader compatibility. Do not imply those future capabilities are implemented in AIWatch today.
 
 ## Live Demo Flow
@@ -17,6 +19,8 @@ Future Veea direction may include more adapters, richer policy controls, runtime
 Say:
 
 ```text
+Veea is the broader runtime-security vision; AIWatch is the working MCP-first proof point.
+
 MCP gives agents tools, and tool definitions plus tool calls create a real trust boundary. AIWatch makes that boundary visible by observing routed MCP traffic, fingerprinting tools, and flagging poisoned descriptions, drift, shadowing, and credential-shaped tool-call parameters.
 ```
 

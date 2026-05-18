@@ -4,6 +4,8 @@ AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local H
 
 For the single day-of-demo flow, use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
 
+Positioning: Veea is the broader runtime-security vision; AIWatch is the current MCP-first implementation used in this demo.
+
 ## Prerequisites
 
 - Python 3.12 available as `py -3.12`

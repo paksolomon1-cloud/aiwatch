@@ -4,11 +4,13 @@ Use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) as the single day-of-demo source. This pa
 
 ## 1. One-line thesis
 
-AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
+Veea is the broader runtime-security vision for tool-using AI agents. AIWatch is the working MCP-first proof point: a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
 ## 2. 20-second pitch
 
 MCP gives agents tools, and tool definitions plus tool calls create a real trust boundary. AIWatch makes that boundary visible by observing MCP traffic routed through its stdio wrapper or local HTTP MCP relay, fingerprinting tools, and flagging poisoned descriptions, drift, shadowing, and credential-shaped tool-call parameters.
+
+The demo shows current AIWatch proof, not the full future Veea product. Future Veea direction may include additional adapters, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility.
 
 ## 3. 5-minute demo script
 
@@ -239,6 +241,16 @@ Does not catch:
 - `/v1/events` request body size guard
 - replay missing-session `404`
 - seed count tests
+
+## 7.1 Future Veea Roadmap
+
+- additional adapters beyond MCP
+- richer policy controls
+- runtime risk scoring
+- optional blocking after measured false-positive work
+- broader agent/tool compatibility
+
+These are future Veea directions, not implemented AIWatch claims.
 
 ## 8. Hard Q&A
 

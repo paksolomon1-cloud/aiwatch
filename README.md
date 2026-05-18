@@ -2,9 +2,13 @@
 
 AIWatch is a local MCP observability and security layer. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. It records MCP tool definitions and tool calls, fingerprints tools, and raises deterministic alerts for tool-surface risks.
 
-Veea is a runtime security layer for tool-using AI agents. AIWatch is the first working implementation, focused on MCP tool traffic.
-
 AIWatch is MCP-first. It is not generic Claude Code monitoring, Cursor monitoring, laptop monitoring, prompt monitoring, shell monitoring, file-edit monitoring, hidden-reasoning visibility, or arbitrary local process monitoring.
+
+## Veea Positioning
+
+Veea is the broader runtime-security vision for tool-using AI agents. AIWatch is the current working MCP-first implementation, focused on MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
+
+Future Veea directions may include additional adapters beyond MCP, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility. Those are future product directions, not current AIWatch capabilities.
 
 ## Current Detection
 
@@ -43,6 +47,10 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 - Extended seed expected count: `8 events / 10 alerts`.
 
 The Claude Code runtime smoke proves local stdio MCP routing through AIWatch worked. The HTTP relay smoke proves the experimental local POST JSON MCP relay can observe a narrow MCP request/response subset when traffic is routed through the AIWatch local HTTP MCP relay. Neither smoke proves generic Claude Code monitoring, generic Cursor monitoring, production proxy coverage, full Streamable HTTP support, SSE support, GET stream handling, prompt visibility, shell command visibility, file edit visibility, hidden reasoning visibility, or client internals visibility.
+
+## Future Veea Direction
+
+The current AIWatch proof gives Veea a concrete MCP-first starting point. Future Veea work may expand toward additional agent/tool adapters, deeper policy controls, richer runtime risk scoring, optional blocking after measured false-positive work, and broader compatibility. These roadmap items should stay clearly future-facing until implemented and validated.
 
 ## Quickstart
 
