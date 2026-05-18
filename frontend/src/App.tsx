@@ -1652,8 +1652,8 @@ function App() {
             AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
           </p>
           <p className="hero-copy hero-copy-secondary">
-            It tracks tool definitions, fingerprint changes, shadowing, poisoned descriptions, and
-            credential-shaped MCP tool-call parameters.
+            Veea is the broader runtime-security vision; AIWatch is this MCP-first proof point for
+            tool definitions, fingerprint changes, shadowing, poisoned descriptions, and credential-shaped MCP tool-call parameters.
           </p>
           <p className="limitation-line hero-limitation">
             It does not monitor prompts, shell commands, file edits, hidden reasoning, or Claude/Cursor internals.
