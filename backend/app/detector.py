@@ -9,11 +9,15 @@ SENSITIVE_PATTERNS = [".env", "id_rsa", "credentials", ".pem", "OPENAI_API_KEY",
 NETWORK_PATTERNS = ["curl ", "wget ", "Invoke-WebRequest", "http://", "https://"]
 MCP_INJECTION_PATTERNS = [
     "ignore previous",
+    "disregard previous",
+    "override previous",
+    "override instructions",
     "before returning",
     "you must",
     "read ~/.aws",
     "read .env",
     "include the contents",
+    "exfiltrate",
 ]
 INTENT_ALLOWED_TERMS = [".env", "environment", "secret", "credential"]
 URL_PATTERN = re.compile(r"https?://[^\s\"']+", re.IGNORECASE)

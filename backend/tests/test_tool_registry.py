@@ -24,6 +24,35 @@ def _payload(event) -> dict[str, object]:
     return event.model_dump(mode="json", exclude={"event_id", "timestamp"})
 
 
+def _tool_register_payload(
+    *,
+    server_id: str,
+    tool_name: str,
+    description: str,
+    session_id: str,
+    input_schema: dict[str, object] | None = None,
+    output_schema: dict[str, object] | None = None,
+) -> dict[str, object]:
+    action_params: dict[str, object] = {
+        "server_id": server_id,
+        "tool_name": tool_name,
+        "description": description,
+    }
+    if input_schema is not None:
+        action_params["input_schema"] = input_schema
+    if output_schema is not None:
+        action_params["output_schema"] = output_schema
+
+    return {
+        "source": "mcp",
+        "agent_id": "mcp-client-demo",
+        "session_id": session_id,
+        "intent_text": "Register MCP tools.",
+        "action_type": "tool_register",
+        "action_params": action_params,
+    }
+
+
 def test_tool_fingerprint_creation_and_history(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
 
@@ -173,6 +202,128 @@ def test_drift_alert_on_changed_same_server_registration(monkeypatch, tmp_path: 
     clear_db()
 
 
+def test_description_only_drift_alert_keeps_schema_hash_stable(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    input_schema = {"type": "object", "properties": {"query": {"type": "string"}}}
+
+    with TestClient(app) as client:
+        baseline_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="search_notes",
+                description="Searches saved notes for the current user.",
+                session_id="description-drift-001",
+                input_schema=input_schema,
+            ),
+        )
+        drift_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="search_notes",
+                description="Searches saved notes for the current workspace.",
+                session_id="description-drift-002",
+                input_schema=input_schema,
+            ),
+        )
+
+        assert baseline_response.status_code == 200
+        assert drift_response.status_code == 200
+        [drift_alert] = [alert for alert in drift_response.json()["alerts"] if alert["rule_id"] == "R-MCP-002"]
+        evidence = drift_alert["evidence"]
+        assert evidence["previous_description_hash"] != evidence["current_description_hash"]
+        assert evidence["previous_schema_hash"] == evidence["current_schema_hash"]
+
+    clear_db()
+
+
+def test_schema_only_drift_alert_keeps_description_hash_stable(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    description = "Exports saved notes for the current user."
+
+    with TestClient(app) as client:
+        baseline_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="export_notes",
+                description=description,
+                session_id="schema-drift-001",
+                input_schema={"type": "object", "properties": {"format": {"type": "string"}}},
+            ),
+        )
+        drift_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="export_notes",
+                description=description,
+                session_id="schema-drift-002",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "format": {"type": "string"},
+                        "include_archived": {"type": "boolean"},
+                    },
+                },
+            ),
+        )
+
+        assert baseline_response.status_code == 200
+        assert drift_response.status_code == 200
+        [drift_alert] = [alert for alert in drift_response.json()["alerts"] if alert["rule_id"] == "R-MCP-002"]
+        evidence = drift_alert["evidence"]
+        assert evidence["previous_description_hash"] == evidence["current_description_hash"]
+        assert evidence["previous_schema_hash"] != evidence["current_schema_hash"]
+
+    clear_db()
+
+
+def test_reordered_schema_keys_do_not_trigger_drift(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        first_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="search_notes",
+                description="Searches saved notes.",
+                session_id="schema-reorder-001",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                },
+            ),
+        )
+        second_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-mcp",
+                tool_name="search_notes",
+                description="Searches saved notes.",
+                session_id="schema-reorder-002",
+                input_schema={
+                    "properties": {
+                        "limit": {"type": "integer"},
+                        "query": {"type": "string"},
+                    },
+                    "type": "object",
+                },
+            ),
+        )
+
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+        assert "R-MCP-002" not in [alert["rule_id"] for alert in second_response.json()["alerts"]]
+
+    clear_db()
+
+
 def test_shadowing_alert_on_cross_server_duplicate_name(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
 
@@ -186,6 +337,66 @@ def test_shadowing_alert_on_cross_server_duplicate_name(monkeypatch, tmp_path: P
 
         rule_ids = [alert["rule_id"] for alert in shadow_response.json()["alerts"]]
         assert "R-MCP-004" in rule_ids
+
+    clear_db()
+
+
+def test_similar_tool_names_across_servers_do_not_shadow(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        first_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-primary-mcp",
+                tool_name="list_notes",
+                description="Lists saved notes.",
+                session_id="similar-name-001",
+            ),
+        )
+        second_response = client.post(
+            "/v1/events",
+            json=_tool_register_payload(
+                server_id="notes-secondary-mcp",
+                tool_name="list_note",
+                description="Lists one saved note.",
+                session_id="similar-name-002",
+            ),
+        )
+
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+        assert "R-MCP-004" not in [alert["rule_id"] for alert in second_response.json()["alerts"]]
+
+    clear_db()
+
+
+def test_shadowing_alert_lists_existing_server_ids_for_third_duplicate(monkeypatch, tmp_path: Path) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        for server_id, session_id in [
+            ("notes-primary-mcp", "shadow-third-001"),
+            ("notes-secondary-mcp", "shadow-third-002"),
+            ("notes-tertiary-mcp", "shadow-third-003"),
+        ]:
+            response = client.post(
+                "/v1/events",
+                json=_tool_register_payload(
+                    server_id=server_id,
+                    tool_name="search_notes",
+                    description="Searches saved notes.",
+                    session_id=session_id,
+                ),
+            )
+            assert response.status_code == 200
+
+        [shadow_alert] = [alert for alert in response.json()["alerts"] if alert["rule_id"] == "R-MCP-004"]
+        assert shadow_alert["evidence"]["current_server_id"] == "notes-tertiary-mcp"
+        assert shadow_alert["evidence"]["other_server_ids"] == [
+            "notes-primary-mcp",
+            "notes-secondary-mcp",
+        ]
 
     clear_db()
 
