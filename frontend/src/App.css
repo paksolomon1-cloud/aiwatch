@@ -466,6 +466,19 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.registry-action-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  max-width: 18rem;
+  text-align: right;
+}
+
+.registry-action-stack .small-copy {
+  margin: 0;
+}
+
 .section-heading {
   margin-bottom: 0.9rem;
   align-items: flex-start;

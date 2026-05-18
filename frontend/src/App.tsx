@@ -574,6 +574,10 @@ function hasToolShadowing(tool: ToolFingerprint | null, toolNameServerMap: Map<s
   return (toolNameServerMap.get(tool.tool_name)?.length ?? 0) > 1
 }
 
+function isFlaggedRegistryTool(tool: ToolFingerprint, toolNameServerMap: Map<string, string[]>): boolean {
+  return tool.drift_count > 0 || hasToolShadowing(tool, toolNameServerMap)
+}
+
 function getToolShadowServers(tool: ToolFingerprint | null, toolNameServerMap: Map<string, string[]>): string[] {
   if (!tool) {
     return []
@@ -643,6 +647,7 @@ function App() {
   const [isToolLoading, setIsToolLoading] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
   const [quarantineMutationId, setQuarantineMutationId] = useState<string | null>(null)
+  const [isBulkQuarantining, setIsBulkQuarantining] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [bannerMessage, setBannerMessage] = useState<string | null>(null)
   const [expandedParamEventIds, setExpandedParamEventIds] = useState<Set<string>>(new Set())
@@ -662,6 +667,9 @@ function App() {
   const shadowedToolNames = [...toolNameServerMap.entries()]
     .filter(([, servers]) => servers.length > 1)
     .map(([toolName]) => toolName)
+  const flaggedUnquarantinedTools = tools.filter(
+    (tool) => !tool.quarantined && isFlaggedRegistryTool(tool, toolNameServerMap),
+  )
 
   const severityCounts: Record<Severity, number> = {
     critical: 0,
@@ -895,6 +903,46 @@ function App() {
       setErrorMessage(message)
     } finally {
       setQuarantineMutationId(null)
+      setIsMutating(false)
+    }
+  }
+
+  async function handleBulkQuarantineFlaggedTools() {
+    if (flaggedUnquarantinedTools.length === 0) {
+      return
+    }
+
+    setIsMutating(true)
+    setIsBulkQuarantining(true)
+    setErrorMessage(null)
+    setBannerMessage(null)
+
+    const selectedFingerprintId = selectedToolId
+
+    try {
+      const results = await Promise.allSettled(
+        flaggedUnquarantinedTools.map((tool) =>
+          quarantineTool(tool.fingerprint_id, 'Dashboard bulk quarantine: flagged tool'),
+        ),
+      )
+      const quarantinedCount = results.filter((result) => result.status === 'fulfilled').length
+      const failedCount = results.length - quarantinedCount
+
+      if (failedCount > 0) {
+        setErrorMessage(`Quarantined ${quarantinedCount} flagged tool(s); ${failedCount} failed.`)
+      } else {
+        setBannerMessage(`Quarantined ${quarantinedCount} flagged tool(s).`)
+      }
+
+      await refreshDashboard()
+      if (selectedFingerprintId) {
+        await loadToolDetails(selectedFingerprintId)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
+      setErrorMessage(message)
+    } finally {
+      setIsBulkQuarantining(false)
       setIsMutating(false)
     }
   }
@@ -2201,6 +2249,7 @@ function App() {
   function renderToolsView() {
     const selectedToolShadowing = hasToolShadowing(selectedTool, toolNameServerMap)
     const selectedToolShadowServers = getToolShadowServers(selectedTool, toolNameServerMap)
+    const bulkQuarantineDisabled = mutationDisabled || flaggedUnquarantinedTools.length === 0
 
     return (
       <div className="page-grid tools-grid">
@@ -2209,6 +2258,21 @@ function App() {
             <div>
               <span className="panel-label">Tool registry</span>
               <h3>{tools.length} current MCP tool fingerprints</h3>
+            </div>
+            <div className="registry-action-stack">
+              <button
+                type="button"
+                className="quarantine-action-button"
+                onClick={() => void handleBulkQuarantineFlaggedTools()}
+                disabled={bulkQuarantineDisabled}
+              >
+                Quarantine flagged tools
+              </button>
+              <p className="muted-copy small-copy">
+                {isBulkQuarantining
+                  ? 'Quarantining flagged routed MCP tools in this registry.'
+                  : 'Quarantines flagged routed MCP tools in this registry.'}
+              </p>
             </div>
           </div>
 
