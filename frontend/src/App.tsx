@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react'
+import { startTransition, useEffect, useState, type MouseEvent } from 'react'
 import './App.css'
 import {
   AiWatchApiError,
@@ -15,7 +15,9 @@ import {
   getToolHistory,
   getTools,
   postEvent,
+  quarantineTool,
   seedDemo,
+  unquarantineTool,
 } from './api'
 import type {
   AgentEvent,
@@ -640,6 +642,7 @@ function App() {
   const [isSessionLoading, setIsSessionLoading] = useState(false)
   const [isToolLoading, setIsToolLoading] = useState(false)
   const [isMutating, setIsMutating] = useState(false)
+  const [quarantineMutationId, setQuarantineMutationId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [bannerMessage, setBannerMessage] = useState<string | null>(null)
   const [expandedParamEventIds, setExpandedParamEventIds] = useState<Set<string>>(new Set())
@@ -866,6 +869,34 @@ function App() {
       setActiveView('tools')
       setSelectedToolId(fingerprintId)
     })
+  }
+
+  async function handleToolQuarantine(
+    event: MouseEvent<HTMLButtonElement>,
+    tool: ToolFingerprint,
+    shouldQuarantine: boolean,
+  ) {
+    event.stopPropagation()
+    setIsMutating(true)
+    setQuarantineMutationId(tool.fingerprint_id)
+    setErrorMessage(null)
+    setBannerMessage(null)
+
+    try {
+      const response = shouldQuarantine
+        ? await quarantineTool(tool.fingerprint_id)
+        : await unquarantineTool(tool.fingerprint_id)
+      const action = response.quarantined ? 'Quarantined' : 'Unquarantined'
+      setBannerMessage(`${action} ${tool.tool_name} for routed MCP calls through the AIWatch wrapper or relay.`)
+      await refreshDashboard()
+      await loadToolDetails(tool.fingerprint_id)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
+      setErrorMessage(message)
+    } finally {
+      setQuarantineMutationId(null)
+      setIsMutating(false)
+    }
   }
 
   async function handleClearData() {
@@ -1502,6 +1533,7 @@ function App() {
                 >
                   <div className="session-card-top">
                     <strong className="mono-inline">{tool.tool_name}</strong>
+                    {tool.quarantined ? <span className="quarantine-badge">Quarantined</span> : null}
                     {hasToolShadowing(tool, toolNameServerMap) ? (
                       <span className="shadow-badge">Shadowed name</span>
                     ) : null}
@@ -2191,6 +2223,7 @@ function App() {
                     <th>Server</th>
                     <th>Observations</th>
                     <th>Status</th>
+                    <th>Quarantine</th>
                     <th>First seen</th>
                     <th>Last seen</th>
                     <th>Description hash</th>
@@ -2202,6 +2235,7 @@ function App() {
                   {tools.map((tool) => {
                     const selected = selectedToolId === tool.fingerprint_id
                     const shadowed = hasToolShadowing(tool, toolNameServerMap)
+                    const mutationActive = quarantineMutationId === tool.fingerprint_id
 
                     return (
                       <tr
@@ -2227,6 +2261,32 @@ function App() {
                               <span className="shadow-badge stable-badge">stable</span>
                             )}
                             {shadowed ? <span className="shadow-badge">shadowed</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="quarantine-cell">
+                            <div className="chip-row">
+                              <span className={tool.quarantined ? 'quarantine-badge' : 'active-badge'}>
+                                {tool.quarantined ? 'Quarantined' : 'Active'}
+                              </span>
+                              {tool.quarantine_reason ? (
+                                <span className="quarantine-reason" title={tool.quarantine_reason}>
+                                  {tool.quarantine_reason}
+                                </span>
+                              ) : null}
+                            </div>
+                            {tool.quarantined_at ? (
+                              <span className="quarantine-time">{formatTimestamp(tool.quarantined_at)}</span>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="quarantine-action-button"
+                              onClick={(event) => void handleToolQuarantine(event, tool, !tool.quarantined)}
+                              disabled={mutationDisabled}
+                              aria-label={`${tool.quarantined ? 'Unquarantine' : 'Quarantine'} ${tool.tool_name}`}
+                            >
+                              {mutationActive ? 'Updating...' : tool.quarantined ? 'Unquarantine' : 'Quarantine'}
+                            </button>
                           </div>
                         </td>
                         <td>{formatTimestamp(tool.first_seen)}</td>
@@ -2274,6 +2334,41 @@ function App() {
                   </div>
                 </div>
               ) : null}
+
+              <div className="info-card quarantine-detail-card">
+                <div className="section-heading compact-heading">
+                  <div>
+                    <span className="detail-label">Manual quarantine</span>
+                    <h4>{selectedTool.quarantined ? 'Quarantined' : 'Active'}</h4>
+                  </div>
+                  <button
+                    type="button"
+                    className="quarantine-action-button"
+                    onClick={(event) => void handleToolQuarantine(event, selectedTool, !selectedTool.quarantined)}
+                    disabled={mutationDisabled}
+                  >
+                    {quarantineMutationId === selectedTool.fingerprint_id
+                      ? 'Updating...'
+                      : selectedTool.quarantined
+                        ? 'Unquarantine'
+                        : 'Quarantine'}
+                  </button>
+                </div>
+                <div className="chip-row">
+                  <span className={selectedTool.quarantined ? 'quarantine-badge' : 'active-badge'}>
+                    {selectedTool.quarantined ? 'Quarantined' : 'Active'}
+                  </span>
+                  {selectedTool.quarantine_reason ? (
+                    <span className="quarantine-reason">{selectedTool.quarantine_reason}</span>
+                  ) : null}
+                  {selectedTool.quarantined_at ? (
+                    <span className="quarantine-time">{formatTimestamp(selectedTool.quarantined_at)}</span>
+                  ) : null}
+                </div>
+                <p className="muted-copy small-copy">
+                  Manual quarantine marks this registry tool for future routed MCP calls when opt-in deny mode is enabled.
+                </p>
+              </div>
 
               <div className="info-card">
                 <span className="detail-label">Current fingerprint status</span>

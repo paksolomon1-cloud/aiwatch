@@ -715,10 +715,6 @@ def unquarantine_tools(
     where_clause, params = _tool_match_clause(tool_name=tool_name, fingerprint_id=fingerprint_id)
 
     with _connect() as connection:
-        rows = connection.execute(
-            f"SELECT * FROM tool_fingerprints WHERE {where_clause} ORDER BY tool_name ASC, server_id ASC",
-            params,
-        ).fetchall()
         connection.execute(
             f"""
             UPDATE tool_fingerprints
@@ -729,6 +725,10 @@ def unquarantine_tools(
             """,
             params,
         )
+        rows = connection.execute(
+            f"SELECT * FROM tool_fingerprints WHERE {where_clause} ORDER BY tool_name ASC, server_id ASC",
+            params,
+        ).fetchall()
     return [_tool_fingerprint_from_row(row) for row in rows]
 
 

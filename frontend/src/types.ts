@@ -91,6 +91,21 @@ export interface ToolFingerprint {
   observation_count: number
   drift_count: number
   latest_event_id: string | null
+  quarantined: boolean
+  quarantine_reason: string | null
+  quarantined_at: string | null
+}
+
+export interface ToolQuarantineResponse {
+  ok: boolean
+  status: string
+  updated: number
+  tool_name: string | null
+  fingerprint: string | null
+  fingerprint_id: string | null
+  quarantined: boolean
+  reason: string | null
+  tools: ToolFingerprint[]
 }
 
 export interface ToolObservation {

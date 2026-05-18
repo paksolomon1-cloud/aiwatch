@@ -10,6 +10,7 @@ import type {
   SessionReplay,
   ToolFingerprint,
   ToolObservation,
+  ToolQuarantineResponse,
 } from './types'
 
 const BACKEND_URL = 'http://127.0.0.1:7330'
@@ -93,6 +94,29 @@ export function getToolHistory(fingerprintId: string): Promise<ToolObservation[]
 
 export function getSessionReplay(sessionId: string): Promise<SessionReplay> {
   return request<SessionReplay>(`/v1/sessions/${encodeURIComponent(sessionId)}/replay`)
+}
+
+export function quarantineTool(
+  fingerprintId: string,
+  reason = 'Dashboard manual quarantine',
+): Promise<ToolQuarantineResponse> {
+  return request<ToolQuarantineResponse>('/v1/tools/quarantine', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fingerprint_id: fingerprintId, reason }),
+  })
+}
+
+export function unquarantineTool(fingerprintId: string): Promise<ToolQuarantineResponse> {
+  return request<ToolQuarantineResponse>('/v1/tools/unquarantine', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fingerprint_id: fingerprintId }),
+  })
 }
 
 export function clearDevData(): Promise<{ status: string; message: string }> {

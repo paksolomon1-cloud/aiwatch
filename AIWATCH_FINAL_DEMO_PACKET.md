@@ -86,6 +86,16 @@ AIWatch ingests Lobster Trap prompt/response audit records locally and correlate
 
 Use `search_notes` for the bundled extended registry demo, or choose a visible tool name from `Tools / Registry`.
 
+Dashboard path:
+
+1. Open `Tools / Registry`.
+2. Select a demo tool row.
+3. Click `Quarantine`.
+4. Confirm the row and detail panel show `Quarantined`, the default reason, and the timestamp.
+5. Click `Unquarantine` to clear it.
+
+CLI fallback:
+
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
@@ -96,6 +106,12 @@ py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:733
 ```text
 This is the control loop: detect a suspicious routed MCP tool, manually quarantine it in the local registry, then use opt-in deny mode for future routed calls to that selected tool.
 ```
+
+### Dashboard quarantine controls
+
+The `Tools / Registry` tab includes compact manual quarantine controls for registered MCP tool fingerprints. The dashboard uses the same local quarantine storage as the CLI.
+
+Expected result: `Quarantine` marks the selected registry tool as `Quarantined` with reason `Dashboard manual quarantine` and a timestamp. `Unquarantine` clears that state. When opt-in deny mode is enabled, future routed calls to quarantined tools can be stopped before forwarding through the AIWatch wrapper or relay.
 
 ### Explain deny mode
 

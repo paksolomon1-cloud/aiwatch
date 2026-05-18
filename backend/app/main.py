@@ -356,6 +356,34 @@ def _tool_quarantine_selector(payload: object) -> tuple[str | None, str | None, 
     return tool_name, fingerprint_id, reason
 
 
+def _tool_quarantine_response(
+    *,
+    tools: list[ToolFingerprint],
+    quarantined: bool,
+    tool_name: str | None,
+    fingerprint_id: str | None,
+) -> dict[str, object]:
+    if not tools:
+        raise HTTPException(status_code=404, detail="No matching tool fingerprint found")
+
+    [first_tool] = tools[:1]
+    response_fingerprint = fingerprint_id or (first_tool.fingerprint_id if len(tools) == 1 else None)
+    response_tool_name = tool_name or first_tool.tool_name
+    response_reason = first_tool.quarantine_reason if quarantined else None
+
+    return {
+        "ok": True,
+        "status": "ok",
+        "updated": len(tools),
+        "tool_name": response_tool_name,
+        "fingerprint": response_fingerprint,
+        "fingerprint_id": response_fingerprint,
+        "quarantined": quarantined,
+        "reason": response_reason,
+        "tools": tools,
+    }
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {
@@ -445,13 +473,12 @@ async def quarantine_tool(request: Request) -> dict[str, object]:
         _parse_json_payload(await _read_event_request_body(request))
     )
     tools = quarantine_tools(tool_name=tool_name, fingerprint_id=fingerprint_id, reason=reason)
-    if not tools:
-        raise HTTPException(status_code=404, detail="No matching tool fingerprint found")
-    return {
-        "status": "ok",
-        "updated": len(tools),
-        "tools": tools,
-    }
+    return _tool_quarantine_response(
+        tools=tools,
+        quarantined=True,
+        tool_name=tool_name,
+        fingerprint_id=fingerprint_id,
+    )
 
 
 @app.post("/v1/tools/unquarantine")
@@ -460,13 +487,12 @@ async def unquarantine_tool(request: Request) -> dict[str, object]:
         _parse_json_payload(await _read_event_request_body(request))
     )
     tools = unquarantine_tools(tool_name=tool_name, fingerprint_id=fingerprint_id)
-    if not tools:
-        raise HTTPException(status_code=404, detail="No matching tool fingerprint found")
-    return {
-        "status": "ok",
-        "updated": len(tools),
-        "tools": tools,
-    }
+    return _tool_quarantine_response(
+        tools=tools,
+        quarantined=False,
+        tool_name=tool_name,
+        fingerprint_id=fingerprint_id,
+    )
 
 
 @app.get("/v1/tools/{fingerprint_id}", response_model=ToolFingerprint)

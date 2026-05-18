@@ -86,6 +86,16 @@ AIWatch ingests Lobster Trap prompt/response audit records locally and correlate
 
 Use `search_notes` for the bundled extended registry demo, or choose a tool name from `Tools / Registry`.
 
+Dashboard path:
+
+1. Open `Tools / Registry`.
+2. Select a demo tool row.
+3. Click `Quarantine`.
+4. Confirm the row and detail panel show `Quarantined`, the default reason, and the timestamp.
+5. Click `Unquarantine` to clear it.
+
+CLI fallback:
+
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
@@ -98,6 +108,17 @@ What to say:
 ```text
 This is the control loop: detect a suspicious routed MCP tool, manually quarantine it in the local registry, then use opt-in deny mode for future routed calls to that selected tool.
 ```
+
+### Dashboard Quarantine Controls
+
+The `Tools / Registry` tab includes compact manual quarantine controls for registered MCP tool fingerprints. The buttons update the same local quarantine storage used by the CLI.
+
+Expected result:
+
+- `Quarantine` marks the selected registry tool as `Quarantined`.
+- The dashboard shows the reason `Dashboard manual quarantine` and a quarantine timestamp.
+- `Unquarantine` clears the manual quarantine state.
+- In observe mode, this is visible registry state. When opt-in deny mode is enabled, future routed calls to quarantined tools can be stopped before forwarding through the AIWatch wrapper or relay.
 
 ### 6. Explain Deny Mode
 
@@ -359,9 +380,9 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- `175 passed`
-- eval total cases: `39`
-- eval passed cases: `39`
+- `208 passed`
+- eval total cases: `43`
+- eval passed cases: `43`
 - false positives: none
 - false negatives: none
 
@@ -383,6 +404,16 @@ AIWatch can optionally deny selected routed MCP tool calls when deterministic hi
 ### Optional Manual Quarantine Demo
 
 Use this only after the extended demo has registered tools. Manual quarantine affects future routed MCP calls to the selected local registry tool when enforcement mode is enabled.
+
+Dashboard path:
+
+1. Open `Tools / Registry`.
+2. Select `search_notes` or another registered demo tool.
+3. Click `Quarantine`.
+4. Confirm the row and detail panel show `Quarantined`, the reason, and the timestamp.
+5. Click `Unquarantine` to clear the state.
+
+CLI fallback:
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend

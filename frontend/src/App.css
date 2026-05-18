@@ -710,6 +710,37 @@
   color: var(--low);
 }
 
+.active-badge,
+.quarantine-badge,
+.quarantine-reason {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  padding: 0.22rem 0.55rem;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.active-badge {
+  border-color: rgba(98, 210, 162, 0.28);
+  background: rgba(98, 210, 162, 0.1);
+  color: var(--low);
+}
+
+.quarantine-badge {
+  border-color: rgba(255, 93, 93, 0.34);
+  background: rgba(255, 93, 93, 0.11);
+  color: #ffd2d2;
+}
+
+.quarantine-reason {
+  max-width: 14rem;
+  color: #ffe28a;
+  background: rgba(255, 209, 102, 0.1);
+  overflow-wrap: anywhere;
+}
+
 .rule-label {
   color: var(--muted);
   font-size: 0.82rem;
@@ -1335,7 +1366,7 @@ input {
 }
 
 .tools-table {
-  min-width: 80rem;
+  min-width: 92rem;
 }
 
 .tools-table th,
@@ -1350,14 +1381,14 @@ input {
 .tools-table td:nth-child(3),
 .tools-table th:nth-child(4),
 .tools-table td:nth-child(4),
-.tools-table th:nth-child(5),
-.tools-table td:nth-child(5),
 .tools-table th:nth-child(6),
 .tools-table td:nth-child(6),
 .tools-table th:nth-child(7),
 .tools-table td:nth-child(7),
 .tools-table th:nth-child(8),
-.tools-table td:nth-child(8) {
+.tools-table td:nth-child(8),
+.tools-table th:nth-child(9),
+.tools-table td:nth-child(9) {
   white-space: nowrap;
 }
 
@@ -1366,27 +1397,78 @@ input {
   min-width: 10rem;
 }
 
+.tools-table th:nth-child(5),
+.tools-table td:nth-child(5) {
+  min-width: 15rem;
+}
+
 .tools-table th:nth-child(2),
 .tools-table td:nth-child(2) {
   min-width: 12rem;
 }
 
-.tools-table th:nth-child(5),
-.tools-table td:nth-child(5),
 .tools-table th:nth-child(6),
-.tools-table td:nth-child(6) {
+.tools-table td:nth-child(6),
+.tools-table th:nth-child(7),
+.tools-table td:nth-child(7) {
   min-width: 8.5rem;
 }
 
-.tools-table th:nth-child(7),
-.tools-table td:nth-child(7),
 .tools-table th:nth-child(8),
-.tools-table td:nth-child(8) {
+.tools-table td:nth-child(8),
+.tools-table th:nth-child(9),
+.tools-table td:nth-child(9) {
   min-width: 9rem;
 }
 
 .tools-table td:last-child {
   min-width: 20rem;
+}
+
+.quarantine-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.quarantine-time {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.quarantine-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(77, 200, 255, 0.22);
+  background: rgba(77, 200, 255, 0.08);
+  color: #d9f6ff;
+  padding: 0.42rem 0.62rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.quarantine-action-button:hover {
+  transform: translateY(-1px);
+}
+
+.quarantine-action-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.quarantine-detail-card .compact-heading {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.quarantine-detail-card h4 {
+  margin: 0;
 }
 
 .detail-panel,

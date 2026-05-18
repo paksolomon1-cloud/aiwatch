@@ -11,7 +11,7 @@ from app.demo_events import (
     mcp_registry_shadow_event,
 )
 from app.main import app
-from app.storage import clear_db, init_db
+from app.storage import clear_db, get_quarantined_tool_for_call, init_db
 
 
 def _configure_test_db(monkeypatch, tmp_path: Path) -> None:
@@ -108,17 +108,39 @@ def test_tool_quarantine_api_sets_lists_and_clears_by_name_and_fingerprint(
             json={"tool_name": tool["tool_name"], "reason": "demo suspicious tool"},
         )
         assert quarantine_response.status_code == 200
-        assert quarantine_response.json()["updated"] == 1
-        assert quarantine_response.json()["tools"][0]["quarantined"] is True
-        assert quarantine_response.json()["tools"][0]["quarantine_reason"] == "demo suspicious tool"
+        quarantine_payload = quarantine_response.json()
+        assert quarantine_payload["ok"] is True
+        assert quarantine_payload["updated"] == 1
+        assert quarantine_payload["tool_name"] == tool["tool_name"]
+        assert quarantine_payload["fingerprint"] == fingerprint_id
+        assert quarantine_payload["fingerprint_id"] == fingerprint_id
+        assert quarantine_payload["quarantined"] is True
+        assert quarantine_payload["reason"] == "demo suspicious tool"
+        assert quarantine_payload["tools"][0]["quarantined"] is True
+        assert quarantine_payload["tools"][0]["quarantine_reason"] == "demo suspicious tool"
+        quarantine_match = get_quarantined_tool_for_call(
+            tool_name=tool["tool_name"],
+            fingerprint_id=fingerprint_id,
+        )
+        assert quarantine_match is not None
+        assert quarantine_match.fingerprint_id == fingerprint_id
+        assert quarantine_match.quarantine_reason == "demo suspicious tool"
 
         listed_response = client.get("/v1/tools/quarantined")
         assert listed_response.status_code == 200
         assert [item["fingerprint_id"] for item in listed_response.json()] == [fingerprint_id]
 
-        clear_response = client.post("/v1/tools/unquarantine", json={"fingerprint_id": fingerprint_id})
+        clear_response = client.post("/v1/tools/unquarantine", json={"tool_name": tool["tool_name"]})
         assert clear_response.status_code == 200
-        assert clear_response.json()["updated"] == 1
+        clear_payload = clear_response.json()
+        assert clear_payload["ok"] is True
+        assert clear_payload["updated"] == 1
+        assert clear_payload["tool_name"] == tool["tool_name"]
+        assert clear_payload["fingerprint"] == fingerprint_id
+        assert clear_payload["quarantined"] is False
+        assert clear_payload["reason"] is None
+        assert clear_payload["tools"][0]["quarantined"] is False
+        assert get_quarantined_tool_for_call(tool_name=tool["tool_name"], fingerprint_id=fingerprint_id) is None
 
         listed_after_clear_response = client.get("/v1/tools/quarantined")
         assert listed_after_clear_response.status_code == 200
