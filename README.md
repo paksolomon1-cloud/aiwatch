@@ -45,8 +45,8 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 - Claude Code local stdio MCP wrapper runtime smoke succeeded on Windows.
 - AIWatch observed Claude Code-routed MCP traffic when Claude Code launched an MCP server through the AIWatch stdio wrapper.
 - Real MCP package smokes passed for `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
-- Tests recently passed: `141`.
-- Eval recently passed: `39/39`.
+- Tests recently passed: `171`.
+- Eval recently passed: `43/43`.
 - Local HTTP POST JSON MCP relay smoke passed for `fixture-http-notes-mcp`.
 - Core seed expected count: `5 events / 7 alerts`.
 - Extended seed expected count: `8 events / 10 alerts`.

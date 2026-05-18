@@ -19,8 +19,10 @@ from app.storage import (
     get_session_events,
     ingest_event,
     init_db,
+    insert_audit_record,
     insert_alert,
     insert_event,
+    list_audit_records,
     list_alerts,
     list_events,
     list_tools,
@@ -44,7 +46,9 @@ def test_init_db_creates_tables(monkeypatch, tmp_path: Path) -> None:
         ).fetchall()
 
     table_names = {row[0] for row in rows}
-    assert {"events", "alerts", "tool_fingerprints", "tool_observations"}.issubset(table_names)
+    assert {"events", "alerts", "tool_fingerprints", "tool_observations", "audit_records"}.issubset(
+        table_names
+    )
 
 
 def test_insert_event_then_list_events_returns_event(monkeypatch, tmp_path: Path) -> None:
@@ -356,3 +360,44 @@ def test_ingest_event_redacts_tool_call_secrets_before_sqlite_persistence(
         "redacted_value": "[REDACTED:GITHUB_TOKEN]",
         "value_length": len(raw_secret),
     }
+
+
+def test_insert_audit_record_stores_sanitized_external_record(monkeypatch, tmp_path: Path) -> None:
+    db_path = _configure_test_db(monkeypatch, tmp_path)
+    init_db()
+    clear_db()
+    raw_secret = "Bearer AIWATCHSTORAGEAUDIT1234567890"
+
+    record_id = insert_audit_record(
+        {
+            "schema": "veea.lobstertrap.audit.v1",
+            "source": "lobstertrap",
+            "layer": "llm_prompt_response",
+            "event_type": "llm_inspection",
+            "timestamp": "2026-05-18T12:00:00Z",
+            "action": "DENY",
+            "decision": "block",
+            "rule_id": "block_credentials",
+            "summary": "Lobster Trap prompt/response inspection",
+            "redacted": True,
+            "evidence": {"authorization": raw_secret},
+        }
+    )
+
+    [stored] = list_audit_records()
+    rendered = json.dumps(stored, sort_keys=True)
+
+    assert record_id == stored["id"]
+    assert stored["source"] == "lobstertrap"
+    assert stored["layer"] == "llm_prompt_response"
+    assert stored["event_type"] == "llm_inspection"
+    assert stored["decision"] == "block"
+    assert stored["rule_id"] == "block_credentials"
+    assert stored["redacted"] is True
+    assert raw_secret not in rendered
+    assert "[REDACTED:BEARER_TOKEN]" in rendered
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute("SELECT record_json_sanitized FROM audit_records").fetchone()
+
+    assert raw_secret not in row[0]

@@ -109,6 +109,25 @@ export interface ToolObservation {
   output_schema: Record<string, unknown>
 }
 
+export interface AuditTimelineRecord {
+  id?: string | number
+  source: 'aiwatch' | 'lobstertrap' | string
+  layer: 'mcp_tool' | 'llm_prompt_response' | string
+  event_type: string
+  timestamp?: string | null
+  created_at?: string | null
+  decision?: string | null
+  action?: string | null
+  rule_id?: string | null
+  severity?: string | null
+  summary?: string | null
+  redacted?: boolean
+  request_id?: string | null
+  evidence?: Record<string, unknown>
+  aiwatch?: Record<string, unknown>
+  lobstertrap?: Record<string, unknown>
+}
+
 export interface DemoSeedItem {
   name: string
   event_id: string

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -24,12 +24,15 @@ from app.storage import (
     get_session_alerts,
     get_session_events,
     ingest_event,
+    insert_audit_record,
     init_db,
     DuplicateEventIdError,
+    list_audit_records as load_audit_records,
     list_alerts as load_alerts,
     list_events as load_events,
     list_tools as load_tools,
 )
+from app.veea_audit import build_veea_audit_timeline, lobstertrap_record_to_veea_audit_envelope
 
 DEV_MODE_TRUTHY_VALUES = {"1", "true", "yes", "on"}
 MAX_EVENT_REQUEST_BODY_BYTES = 4 * 1024 * 1024
@@ -147,6 +150,16 @@ def _parse_agent_event(raw_body: bytes) -> AgentEvent:
         raise _request_validation_error([_body_loc_error(item) for item in error.errors()]) from None
 
 
+def _parse_json_payload(raw_body: bytes) -> object:
+    if not raw_body:
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    try:
+        return json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Malformed JSON") from None
+
+
 def _dev_mode_enabled() -> bool:
     return os.environ.get("AIWATCH_DEV_MODE", "").strip().lower() in DEV_MODE_TRUTHY_VALUES
 
@@ -154,6 +167,49 @@ def _dev_mode_enabled() -> bool:
 def _require_dev_mode() -> None:
     if not _dev_mode_enabled():
         raise HTTPException(status_code=404, detail="Not Found")
+
+
+def _audit_record_timestamp(record: dict[str, object]) -> str:
+    timestamp = record.get("timestamp") or record.get("created_at")
+    return timestamp if isinstance(timestamp, str) else ""
+
+
+def _audit_record_tie_key(record: dict[str, object]) -> tuple[str, str, str, str]:
+    stable_id = record.get("id") or record.get("request_id") or record.get("rule_id")
+
+    aiwatch = record.get("aiwatch")
+    if isinstance(aiwatch, dict):
+        stable_id = aiwatch.get("event_id") or aiwatch.get("alert_id") or stable_id
+
+    lobstertrap = record.get("lobstertrap")
+    if isinstance(lobstertrap, dict):
+        stable_id = lobstertrap.get("request_id") or stable_id
+
+    return (
+        str(record.get("source", "")),
+        str(record.get("layer", "")),
+        str(record.get("event_type", "")),
+        str(stable_id or ""),
+    )
+
+
+def _api_aiwatch_audit_records() -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for record in build_veea_audit_timeline(load_events(), load_alerts()):
+        api_record = dict(record)
+        aiwatch = api_record.get("aiwatch")
+        if isinstance(aiwatch, dict):
+            stable_id = aiwatch.get("event_id") or aiwatch.get("alert_id")
+            if stable_id:
+                api_record["id"] = f"aiwatch:{stable_id}"
+        api_record.setdefault("created_at", api_record.get("timestamp"))
+        records.append(api_record)
+    return records
+
+
+def _sort_audit_timeline_desc(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    stable_records = sorted(records, key=_audit_record_tie_key)
+    return sorted(stable_records, key=_audit_record_timestamp, reverse=True)
 
 
 @app.get("/")
@@ -177,6 +233,40 @@ async def create_event(request: Request) -> dict[str, object]:
         "event_id": event.event_id,
         "alerts_created": len(alerts),
         "alerts": alerts,
+    }
+
+
+@app.post("/v1/integrations/lobstertrap/audit")
+async def ingest_lobstertrap_audit(request: Request) -> dict[str, object]:
+    payload = _parse_json_payload(await _read_event_request_body(request))
+
+    if isinstance(payload, dict) and "records" in payload:
+        raw_records = payload["records"]
+        if not isinstance(raw_records, list):
+            raise HTTPException(status_code=400, detail="records must be a list")
+    elif isinstance(payload, dict):
+        raw_records = [payload]
+    else:
+        raise HTTPException(status_code=400, detail="Expected a JSON object or batch records object")
+
+    accepted = 0
+    rejected = 0
+    stored_record_ids: list[int] = []
+
+    for raw_record in raw_records:
+        if not isinstance(raw_record, dict):
+            rejected += 1
+            continue
+
+        envelope = lobstertrap_record_to_veea_audit_envelope(raw_record)
+        stored_record_ids.append(insert_audit_record(envelope))
+        accepted += 1
+
+    return {
+        "status": "ok",
+        "accepted": accepted,
+        "rejected": rejected,
+        "stored_record_ids": stored_record_ids,
     }
 
 
@@ -223,6 +313,15 @@ def replay_session(session_id: str) -> dict[str, object]:
         "events": events,
         "alerts": alerts,
     }
+
+
+@app.get("/v1/audit/timeline")
+def read_audit_timeline(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, object]]:
+    records = [
+        *load_audit_records(limit=limit),
+        *_api_aiwatch_audit_records(),
+    ]
+    return _sort_audit_timeline_desc(records)[:limit]
 
 
 @app.delete("/v1/dev/clear")

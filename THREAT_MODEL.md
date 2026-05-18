@@ -9,6 +9,7 @@ AIWatch v1 is scoped to MCP observability and integrity for traffic routed throu
 - MCP `tools/call` parameters
 - MCP tool registry and history
 - operator visibility into MCP behavior
+- local unified audit timeline records ingested from Lobster Trap JSONL audit files
 
 ## Trust Boundary
 
@@ -23,6 +24,8 @@ AIWatch can observe MCP traffic only when the MCP client is configured to launch
 The local HTTP MCP relay Phase A path is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
 
 Real ingestion paths use the canonical ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
+
+The Lobster Trap interop path ingests local Lobster Trap JSONL audit records into AIWatch's local audit store after normalization and redaction. It is a local audit timeline bridge, not prompt inspection by AIWatch and not MCP inspection by Lobster Trap.
 
 ## Assumptions
 
@@ -53,6 +56,7 @@ Real ingestion paths use the canonical ingest function. Known detected credentia
 - Cursor internals
 - compromised backend host
 - traffic not routed through AIWatch
+- Lobster Trap audit records that are not posted to the local AIWatch ingestion endpoint or read by the CLI ingestion command
 - production auth or multi-tenant security
 - guaranteed prevention or blocking of all exfiltration
 - full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying

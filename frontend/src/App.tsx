@@ -5,6 +5,7 @@ import {
   BACKEND_OFFLINE_MESSAGE,
   clearDevData,
   getAlerts,
+  getAuditTimeline,
   getEvents,
   getHealth,
   getSessionReplay,
@@ -17,6 +18,7 @@ import {
 import type {
   AgentEvent,
   Alert,
+  AuditTimelineRecord,
   DemoSeedResponse,
   EventIngestResponse,
   HealthResponse,
@@ -26,7 +28,7 @@ import type {
   ToolObservation,
 } from './types'
 
-type View = 'overview' | 'alerts' | 'sessions' | 'tools'
+type View = 'overview' | 'alerts' | 'audit' | 'sessions' | 'tools'
 
 interface SessionSummary {
   sessionId: string
@@ -69,6 +71,46 @@ function formatJson(value: unknown): string {
 
 function toSentenceCase(value: string): string {
   return value.replaceAll('_', ' ')
+}
+
+function formatAuditSource(source: string): string {
+  if (source === 'aiwatch') {
+    return 'AIWatch'
+  }
+
+  if (source === 'lobstertrap') {
+    return 'Lobster Trap'
+  }
+
+  return toSentenceCase(source)
+}
+
+function formatAuditLayer(layer: string): string {
+  if (layer === 'mcp_tool') {
+    return 'MCP tool'
+  }
+
+  if (layer === 'llm_prompt_response') {
+    return 'LLM prompt-response'
+  }
+
+  return toSentenceCase(layer)
+}
+
+function getAuditRecordKey(record: AuditTimelineRecord, index: number): string {
+  return [
+    record.id,
+    record.source,
+    record.layer,
+    record.event_type,
+    record.timestamp,
+    record.created_at,
+    record.request_id,
+    record.rule_id,
+    index,
+  ]
+    .filter((part) => part !== undefined && part !== null && part !== '')
+    .join(':')
 }
 
 function getRuleFamily(ruleId: string): 'code' | 'mcp' | 'intent' | 'other' {
@@ -344,6 +386,7 @@ function App() {
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [tools, setTools] = useState<ToolFingerprint[]>([])
+  const [auditTimeline, setAuditTimeline] = useState<AuditTimelineRecord[]>([])
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [sessionInput, setSessionInput] = useState('')
@@ -363,6 +406,8 @@ function App() {
   const associatedEvent = getAssociatedEvent(selectedAlert, eventMap)
   const sessionSummaries = buildSessionSummaries(events, alerts)
   const recentAlerts = alerts.slice(0, 5)
+  const lobstertrapAuditCount = auditTimeline.filter((record) => record.source === 'lobstertrap').length
+  const aiwatchAuditCount = auditTimeline.filter((record) => record.source === 'aiwatch').length
   const toolNameServerMap = buildToolNameServerMap(tools)
   const shadowedToolNames = [...toolNameServerMap.entries()]
     .filter(([, servers]) => servers.length > 1)
@@ -387,11 +432,12 @@ function App() {
     setErrorMessage(null)
 
     try {
-      const [nextHealth, nextEvents, nextAlerts, nextTools] = await Promise.all([
+      const [nextHealth, nextEvents, nextAlerts, nextTools, nextAuditTimeline] = await Promise.all([
         getHealth(),
         getEvents(),
         getAlerts(),
         getTools(),
+        getAuditTimeline(),
       ])
 
       setHealth(nextHealth)
@@ -410,6 +456,7 @@ function App() {
           (left, right) => new Date(right.last_seen).valueOf() - new Date(left.last_seen).valueOf(),
         ),
       )
+      setAuditTimeline(nextAuditTimeline)
     } catch (error) {
       const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
       setErrorMessage(message)
@@ -417,6 +464,7 @@ function App() {
       setEvents([])
       setAlerts([])
       setTools([])
+      setAuditTimeline([])
       setSelectedAlert(null)
       setSelectedTool(null)
       setSelectedToolId('')
@@ -888,9 +936,9 @@ function App() {
       <div className="page-grid overview-grid">
 
         <section className="panel methodology-panel">
-          <span className="panel-label">Methodology</span>
+          <span className="panel-label">Audit surface</span>
           <p className="muted-copy small-copy">
-            AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
+            AIWatch observes MCP traffic routed through the stdio wrapper or local HTTP MCP relay.
           </p>
           <p className="muted-copy small-copy">
             It captures MCP `tools/list` and `tools/call` traffic, normalizes tools into fingerprints,
@@ -898,39 +946,13 @@ function App() {
             fingerprint drift, shadowing, and credential-shaped tool-call parameters.
           </p>
           <p className="limitation-line">
-            It does not monitor prompts, shell commands, file edits, hidden reasoning, or Claude/Cursor internals.
+            Routed MCP tool traffic only. Prompts, shell commands, file edits, hidden reasoning,
+            laptop activity, and arbitrary network traffic are outside this observation surface.
           </p>
         </section>
 
-        <section className="panel proof-panel">
-          <span className="panel-label">Current proof points</span>
-          <div className="proof-grid">
-            <div>
-              <strong>141</strong>
-              <span>tests passing</span>
-            </div>
-            <div>
-              <strong>39/39</strong>
-              <span>eval passing</span>
-            </div>
-            <div>
-              <strong>5 / 7</strong>
-              <span>core seed events / alerts</span>
-            </div>
-            <div>
-              <strong>8 / 10</strong>
-              <span>extended seed events / alerts</span>
-            </div>
-          </div>
-          <div className="live-status-row">
-            <span className="live-count-chip">{health?.events ?? 0} events</span>
-            <span className="live-count-chip">{alerts.length} alerts</span>
-            <span className="live-count-chip">{tools.length} tools</span>
-          </div>
-        </section>
-
         <section className="panel guide-panel">
-          <span className="panel-label">What alerts mean</span>
+          <span className="panel-label">Deterministic MCP checks</span>
           <div className="guide-list">
             {ruleGuide.map((item) => (
               <div key={item.family} className="guide-item">
@@ -944,8 +966,8 @@ function App() {
         <section className="panel severity-panel">
           <div className="section-heading">
             <div>
-              <span className="panel-label">Alerts by severity</span>
-              <h3>Risk posture</h3>
+              <span className="panel-label">Alert posture</span>
+              <h3>Severity counts</h3>
             </div>
           </div>
           <div className="severity-grid">
@@ -962,7 +984,7 @@ function App() {
           <div className="section-heading">
             <div>
               <span className="panel-label">Recent alerts</span>
-              <h3>Latest detections</h3>
+              <h3>Latest deterministic findings</h3>
             </div>
             <button type="button" className="link-button" onClick={() => setActiveView('alerts')}>
               View all alerts
@@ -1002,7 +1024,7 @@ function App() {
           <div className="section-heading">
             <div>
               <span className="panel-label">Recent sessions</span>
-              <h3>Replay targets</h3>
+              <h3>Audit replay targets</h3>
             </div>
           </div>
 
@@ -1040,7 +1062,7 @@ function App() {
           <div className="section-heading">
             <div>
               <span className="panel-label">Tool registry</span>
-              <h3>Current MCP identities</h3>
+              <h3>Current MCP tool identities</h3>
             </div>
             <button type="button" className="link-button" onClick={() => setActiveView('tools')}>
               Open registry
@@ -1077,14 +1099,95 @@ function App() {
     )
   }
 
+  function renderUnifiedAuditTimeline() {
+    return (
+      <div className="page-grid audit-grid">
+        <section className="panel audit-panel">
+          <div className="section-heading">
+            <div>
+              <span className="panel-label">Local unified audit timeline</span>
+              <h3>{auditTimeline.length} normalized audit records</h3>
+            </div>
+            <div className="live-status-row audit-counts">
+              <span className="live-count-chip">{aiwatchAuditCount} AIWatch MCP</span>
+              <span className="live-count-chip">{lobstertrapAuditCount} Lobster Trap LLM</span>
+            </div>
+          </div>
+
+          <div className="info-card audit-boundary-card">
+            <p className="muted-copy small-copy">
+              AIWatch MCP records + Lobster Trap audit records in one local timeline.
+              Lobster Trap covers prompt/response audit logs; AIWatch covers routed MCP tool traffic.
+            </p>
+            <p className="muted-copy small-copy">
+              Local integration only, not TerraFabric deployment or a Veea cloud control plane.
+            </p>
+          </div>
+
+          {auditTimeline.length === 0 ? (
+            <p className="empty-state">
+              No unified audit records yet. Seed AIWatch MCP events or ingest a Lobster Trap audit JSONL file.
+            </p>
+          ) : (
+            <div className="table-scroll">
+              <table className="alerts-table audit-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Source</th>
+                    <th>Layer</th>
+                    <th>Decision</th>
+                    <th>Rule</th>
+                    <th>Evidence</th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditTimeline.map((record, index) => {
+                    const ruleId = record.rule_id ?? 'n/a'
+                    const decision = record.decision ?? record.action ?? 'n/a'
+
+                    return (
+                      <tr key={getAuditRecordKey(record, index)}>
+                        <td>{formatTimestamp(record.timestamp ?? record.created_at)}</td>
+                        <td>
+                          <span className={`source-badge source-${record.source}`}>
+                            {formatAuditSource(record.source)}
+                          </span>
+                        </td>
+                        <td>{formatAuditLayer(record.layer)}</td>
+                        <td>
+                          <span className="decision-pill">{decision}</span>
+                        </td>
+                        <td>
+                          <span className={`rule-pill rule-${getRuleFamily(ruleId)}`}>{ruleId}</span>
+                        </td>
+                        <td>
+                          <span className={record.redacted ? 'shadow-badge stable-badge' : 'shadow-badge'}>
+                            {record.redacted ? 'redacted' : 'not marked'}
+                          </span>
+                        </td>
+                        <td>{record.summary ?? toSentenceCase(record.event_type)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    )
+  }
+
   function renderAlertsTable() {
     return (
       <div className="page-grid alerts-grid">
         <section className="panel table-panel">
           <div className="section-heading">
             <div>
-              <span className="panel-label">All alerts</span>
-              <h3>{alerts.length} persisted alerts</h3>
+              <span className="panel-label">Alert queue</span>
+              <h3>{alerts.length} persisted deterministic findings</h3>
             </div>
           </div>
 
@@ -1160,7 +1263,7 @@ function App() {
         <aside className="panel detail-panel">
           <div className="section-heading">
             <div>
-              <span className="panel-label">Alert detail</span>
+              <span className="panel-label">Redacted evidence</span>
               <h3>{selectedAlert ? selectedAlert.rule_id : 'Select an alert'}</h3>
             </div>
           </div>
@@ -1178,7 +1281,7 @@ function App() {
           <div className="section-heading">
             <div>
               <span className="panel-label">Session replay</span>
-              <h3>Load a session</h3>
+              <h3>Audit timeline selector</h3>
             </div>
           </div>
 
@@ -1238,7 +1341,7 @@ function App() {
         <section className="panel replay-panel">
           <div className="section-heading">
             <div>
-              <span className="panel-label">Replay timeline</span>
+              <span className="panel-label">Audit timeline</span>
               <h3>{selectedSessionId || 'No session selected'}</h3>
             </div>
           </div>
@@ -1645,50 +1748,58 @@ function App() {
   return (
     <div className="app-shell">
       <header className="hero-panel">
-        <div>
-          <p className="eyebrow">AIWatch dashboard</p>
-          <h1>MCP Tool Security Monitor</h1>
-          <p className="hero-copy">
-            AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
-          </p>
-          <p className="hero-copy hero-copy-secondary">
-            AIWatch highlights routed MCP tool definitions, fingerprint changes, shadowing,
-            poisoned descriptions, and credential-shaped MCP tool-call parameters.
-          </p>
-          <p className="limitation-line hero-limitation">
-            It does not monitor prompts, shell commands, file edits, hidden reasoning, or Claude/Cursor internals.
-          </p>
-        </div>
+        <div className="header-title-row">
+          <div className="header-title-copy">
+            <p className="eyebrow">AIWatch audit console</p>
+            <h1>MCP Runtime Security Monitor</h1>
+            <p className="hero-copy">
+              Review routed MCP tool traffic, tool registry drift, deterministic MCP checks,
+              session replay, and redacted evidence.
+            </p>
+          </div>
 
-        <div className="hero-controls">
           <div className="status-chip-row">
             <span className={`status-chip ${backendOffline ? 'status-offline' : 'status-online'}`}>
               {backendOffline ? 'Backend: Offline' : 'Backend: Online'}
             </span>
-            <span className="status-chip status-storage">Storage: SQLite local store</span>
+            <span className="status-chip status-storage">Store: SQLite local audit log</span>
+            <span className="status-chip status-storage">Scope: Routed MCP only</span>
           </div>
+        </div>
 
+        <div className="header-claim-row">
+          <p className="limitation-line hero-limitation">
+            AIWatch observes MCP traffic routed through the stdio wrapper or local HTTP MCP relay.
+          </p>
+          <p className="scope-warning">
+            Out of scope: prompts, shell commands, file edits, hidden reasoning, laptop activity,
+            and arbitrary network traffic.
+          </p>
+        </div>
+
+        <div className="header-workbench">
           <div className="controls-card">
-            <span className="panel-label">Demo controls</span>
+            <span className="panel-label">Local audit controls</span>
             <p className="muted-copy small-copy">
-              Local demos that populate alerts, tool fingerprints, and redacted credential evidence. Includes drift and shadowing scenarios.
+              Populate the local audit timeline with deterministic MCP findings, tool fingerprints,
+              and redacted credential evidence.
             </p>
             <div className="control-row">
               <button type="button" onClick={() => void refreshDashboard()} disabled={isLoading || isMutating}>
                 Refresh
               </button>
               <button type="button" onClick={() => void handleSeedDemo(false)} disabled={mutationDisabled}>
-                Seed Core Demo
+                Seed Core Audit
               </button>
               <button type="button" onClick={() => void handleSeedDemo(true)} disabled={mutationDisabled}>
-                Seed Extended MCP Registry Demo
+                Seed Tool Registry Audit
               </button>
               <button type="button" onClick={() => void handleCredentialDemo()} disabled={mutationDisabled}>
-                Trigger R-MCP-005 Demo
+                Trigger Redacted Evidence
               </button>
             </div>
             <p className="muted-copy small-copy">
-              Triggers a single R-MCP-005 alert independently of the core and extended seeds.
+              Adds one synthetic MCP tools/call event for R-MCP-005 evidence review.
             </p>
             <button
               type="button"
@@ -1700,9 +1811,46 @@ function App() {
             </button>
           </div>
 
-          <div className="command-panel">
-            <span className="detail-label">CLI fallback</span>
-            <p className="muted-copy small-copy">Demo controls require AIWATCH_DEV_MODE=true on the backend.</p>
+          <div className="panel proof-panel header-proof-panel">
+            <div className="section-heading">
+              <div>
+                <span className="panel-label">Validation state</span>
+                <h3>Current audit proof</h3>
+              </div>
+            </div>
+            <div className="proof-grid">
+              <div>
+                <strong>171</strong>
+                <span>backend tests passing</span>
+              </div>
+              <div>
+                <strong>43/43</strong>
+                <span>deterministic eval cases</span>
+              </div>
+              <div>
+                <strong>5/7 + 8/10</strong>
+                <span>core and registry seed states</span>
+              </div>
+              <div>
+                <strong>Live</strong>
+                <span>local Lobster Trap audit ingestion</span>
+              </div>
+            </div>
+            <div className="live-status-row">
+              <span className="live-count-chip">{health?.events ?? 0} events</span>
+              <span className="live-count-chip">{alerts.length} alerts</span>
+              <span className="live-count-chip">{tools.length} tools</span>
+              <span className="live-count-chip">{auditTimeline.length} audit records</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="command-panel command-strip">
+          <div>
+            <span className="detail-label">CLI audit path</span>
+            <p className="muted-copy small-copy">Controls require AIWATCH_DEV_MODE=true on the backend.</p>
+          </div>
+          <div className="command-strip-codes">
             <pre className="scroll-code">py -3.12 scripts\aiwatch.py demo-seed</pre>
             <pre className="scroll-code">py -3.12 scripts\aiwatch.py demo-seed --extended</pre>
           </div>
@@ -1723,6 +1871,13 @@ function App() {
           onClick={() => setActiveView('alerts')}
         >
           Alerts
+        </button>
+        <button
+          type="button"
+          className={activeView === 'audit' ? 'active-tab' : ''}
+          onClick={() => setActiveView('audit')}
+        >
+          Unified Audit
         </button>
         <button
           type="button"
@@ -1761,12 +1916,13 @@ function App() {
         <main>
           {activeView === 'overview' ? renderOverview() : null}
           {activeView === 'alerts' ? renderAlertsTable() : null}
+          {activeView === 'audit' ? renderUnifiedAuditTimeline() : null}
           {activeView === 'tools' ? renderToolsView() : null}
           {activeView === 'sessions' ? renderSessionReplay() : null}
         </main>
       )}
 
-      {!backendOffline && tools.length === 0 && alerts.length === 0 && events.length === 0 ? (
+      {!backendOffline && tools.length === 0 && alerts.length === 0 && events.length === 0 && auditTimeline.length === 0 ? (
         <div className="panel empty-footnote">
           <p className="empty-state">
             No events, alerts, or MCP tool fingerprints yet. Seed the demo to populate the dashboard.

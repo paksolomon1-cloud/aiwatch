@@ -74,7 +74,7 @@ R-MCP-005 is deterministic credential-shaped value detection in MCP tools/call p
 Say:
 
 ```text
-The current proof set is 141 backend tests passing, 39/39 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
+The current proof set is 171 backend tests passing, 43/43 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
 ```
 
 ## Rehearsal Proof Commands
@@ -83,12 +83,12 @@ Run these before the demo or when asked to prove the claims. Keep the backend ru
 
 ### Optional Layered Veea/Lobster Trap + AIWatch Demo
 
-Use this only as a side-by-side companion story, not as a claimed AIWatch integration.
+Use this as a local layered audit story. It is local Lobster Trap audit ingestion into AIWatch, not TerraFabric deployment or a Veea cloud control plane.
 
 Say:
 
 ```text
-Lobster Trap inspects model conversations; AIWatch inspects routed MCP tool traffic. This is a layered Veea demo, not a fused runtime pipeline yet.
+Lobster Trap writes prompt/response-layer audit logs; AIWatch observes routed MCP tool traffic. AIWatch can ingest a local Lobster Trap audit JSONL file so the dashboard shows both layers in one local audit timeline.
 ```
 
 Verified local Lobster Trap commands after building `C:\Users\pakso\lobstertrap\lobstertrap.exe`:
@@ -121,7 +121,7 @@ Get-Content .\veea-aiwatch-timeline.jsonl -TotalCount 10
 Say:
 
 ```text
-These JSONL files are the first technical bridge: AIWatch exports MCP-layer alerts and an MCP observation timeline into Veea-style audit envelopes. They are export artifacts, not live forwarding to Lobster Trap and not a shared runtime pipeline yet.
+These JSONL files are offline interop artifacts: AIWatch exports MCP-layer alerts and an MCP observation timeline into Veea-style audit envelopes.
 ```
 
 If you already have a Lobster Trap audit JSONL file, merge it with the AIWatch MCP audit timeline as a local unified Veea-style artifact:
@@ -137,10 +137,28 @@ Say:
 This unified file is local export/merge interop. Lobster Trap remains the prompt/response inspection layer; AIWatch remains the routed MCP tool layer. This is not live forwarding, not a shared event bus, not a shared dashboard, and not Lobster Trap ingestion.
 ```
 
+To ingest a Lobster Trap audit file into the local AIWatch backend and show it in the dashboard's Unified Audit tab:
+
+```powershell
+py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
+```
+
+Optional follow mode for appended JSONL lines:
+
+```powershell
+py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
 Say:
 
 ```text
-This is the layered Veea story: Lobster Trap is the prompt/response-layer baseline, while AIWatch adds MCP tool-layer visibility. Today they are companion demos, not a verified event bridge.
+This is local live audit ingestion. It does not make AIWatch inspect prompts directly, does not make Lobster Trap inspect MCP traffic, and does not use TerraFabric infrastructure.
+```
+
+Say:
+
+```text
+This is the layered Veea story: Lobster Trap is the prompt/response-layer baseline, while AIWatch adds MCP tool-layer visibility. The bridge here is local audit ingestion into AIWatch's timeline, not a cloud control plane.
 ```
 
 Do not run or claim `serve --backend http://localhost:11434` as a live proxy demo unless an OpenAI-compatible backend is actually listening and a request succeeds.
@@ -155,7 +173,7 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- `141 passed`
+- `171 passed`
 - eval total cases: `39`
 - eval passed cases: `39`
 - false positives: none

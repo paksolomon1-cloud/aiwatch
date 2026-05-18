@@ -24,4 +24,6 @@ AIWatch can observe Claude Code-routed MCP traffic when Claude Code launches an 
 
 AIWatch can also observe the local HTTP relay Phase A smoke when MCP POST JSON request/response traffic is routed through the AIWatch local HTTP MCP relay. That path is local-only, experimental, and MCP-specific.
 
+AIWatch can ingest local Lobster Trap JSONL audit logs into its own unified audit timeline. That is local audit interop; it does not make AIWatch a prompt monitor, does not make Lobster Trap an MCP monitor, and does not imply a Veea cloud control plane.
+
 `aiwatch doctor` can inspect local `.mcp.json` and `.cursor/mcp.json` config shape under the current working directory. That is not Cursor runtime support and does not prove any client loaded the config.

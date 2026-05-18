@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from app.cli import main as cli_main
+
+
+def _secret(*parts: str) -> str:
+    return "".join(parts)
+
+
+def test_ingest_lobstertrap_audit_cli_posts_jsonl_and_continues_after_bad_line(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "lobstertrap-audit.jsonl"
+    raw_secret = _secret("Bearer ", "LOBSTERTRAPCLI", "1234567890", "ABCDEF")
+    audit_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "timestamp": "2026-05-18T12:00:00Z",
+                        "request_id": "req-cli-1",
+                        "direction": "ingress",
+                        "action": "DENY",
+                        "rule_name": "block_prompt_injection",
+                        "prompt": raw_secret,
+                    },
+                    sort_keys=True,
+                ),
+                "{not-json",
+                json.dumps(
+                    {
+                        "timestamp": "2026-05-18T12:01:00Z",
+                        "request_id": "req-cli-2",
+                        "direction": "egress",
+                        "action": "ALLOW",
+                    },
+                    sort_keys=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    posted_records: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        posted_records.append(
+            {
+                "path": path,
+                "backend_url": backend_url,
+                "method": method,
+                "body": body,
+            }
+        )
+        return {"accepted": 1, "rejected": 0, "stored_record_ids": [len(posted_records)]}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(
+        [
+            "ingest-lobstertrap-audit",
+            "--file",
+            str(audit_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    rendered_cli_output = captured.out + captured.err
+
+    assert len(posted_records) == 2
+    assert all(record["path"] == "/v1/integrations/lobstertrap/audit" for record in posted_records)
+    assert all(record["method"] == "POST" for record in posted_records)
+    assert [record["body"]["request_id"] for record in posted_records] == ["req-cli-1", "req-cli-2"]
+    assert "Skipping malformed JSONL line 2" in captured.err
+    assert "Ingested 2 Lobster Trap audit records; rejected 0; malformed lines 1; stored IDs [1, 2]." in captured.out
+    assert raw_secret not in rendered_cli_output
+
+
+def test_ingest_lobstertrap_audit_cli_rejects_nonlocal_backend_url(tmp_path: Path, capsys) -> None:
+    audit_path = tmp_path / "lobstertrap-audit.jsonl"
+    audit_path.write_text('{"request_id":"req-cli-local","action":"ALLOW"}\n', encoding="utf-8")
+
+    assert cli_main(
+        [
+            "ingest-lobstertrap-audit",
+            "--file",
+            str(audit_path),
+            "--backend-url",
+            "https://example.com",
+        ]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "only posts to a local AIWatch backend URL" in captured.err

@@ -4,11 +4,13 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
 
 from app.storage import clear_db, init_db, list_alerts as list_local_alerts, list_events as list_local_events
 from app.veea_audit import (
@@ -358,6 +360,19 @@ def build_parser() -> argparse.ArgumentParser:
     merge_parser.add_argument("--out", type=Path, help="Write merged JSONL to this file instead of stdout.")
     merge_parser.set_defaults(handler=handle_merge_veea_audit)
 
+    ingest_lobstertrap_parser = subparsers.add_parser(
+        "ingest-lobstertrap-audit",
+        help="Ingest a local Lobster Trap JSONL audit file into the AIWatch backend.",
+    )
+    ingest_lobstertrap_parser.add_argument("--file", type=Path, required=True, help="Lobster Trap JSONL audit file.")
+    ingest_lobstertrap_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    ingest_lobstertrap_parser.add_argument(
+        "--follow",
+        action="store_true",
+        help="Continue tailing the file for appended Lobster Trap audit records.",
+    )
+    ingest_lobstertrap_parser.set_defaults(handler=handle_ingest_lobstertrap_audit)
+
     return parser
 
 
@@ -515,6 +530,95 @@ def handle_merge_veea_audit(args: argparse.Namespace) -> int:
 
     sys.stdout.write(render_veea_audit_jsonl(envelopes))
     print(f"Merged {len(envelopes)} Veea audit timeline records to stdout.", file=sys.stderr)
+    return 0
+
+
+def _is_local_backend_url(backend_url: str) -> bool:
+    parsed = urllib.parse.urlparse(backend_url)
+    return parsed.scheme in {"http", "https"} and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+
+
+def _iter_jsonl_lines(input_path: Path, *, follow: bool) -> Iterator[tuple[int, str]]:
+    line_number = 0
+    with input_path.open("r", encoding="utf-8-sig") as handle:
+        while True:
+            raw_line = handle.readline()
+            if raw_line:
+                line_number += 1
+                yield line_number, raw_line
+                continue
+
+            if not follow:
+                return
+
+            time.sleep(0.25)
+
+
+def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
+    if not _is_local_backend_url(args.backend_url):
+        print("ingest-lobstertrap-audit only posts to a local AIWatch backend URL.", file=sys.stderr)
+        return 2
+
+    input_path = Path(args.file)
+    if not input_path.exists():
+        print(f"Lobster Trap audit file not found: {input_path}", file=sys.stderr)
+        return 2
+
+    accepted = 0
+    rejected = 0
+    malformed = 0
+    stored_record_ids: list[int] = []
+
+    try:
+        for line_number, raw_line in _iter_jsonl_lines(input_path, follow=args.follow):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as error:
+                malformed += 1
+                print(f"Skipping malformed JSONL line {line_number}: {error.msg}", file=sys.stderr)
+                continue
+
+            if not isinstance(payload, dict):
+                malformed += 1
+                print(f"Skipping JSONL line {line_number}: expected JSON object", file=sys.stderr)
+                continue
+
+            try:
+                response_data = request_json(
+                    "/v1/integrations/lobstertrap/audit",
+                    backend_url=args.backend_url,
+                    method="POST",
+                    body=payload,
+                )
+            except urllib.error.HTTPError as error:
+                print(
+                    f"AIWatch backend rejected Lobster Trap audit line {line_number}: HTTP {error.code}",
+                    file=sys.stderr,
+                )
+                return 1
+            except urllib.error.URLError:
+                print(BACKEND_DOWN_MESSAGE)
+                return 1
+
+            if isinstance(response_data, dict):
+                accepted += int(response_data.get("accepted", 0))
+                rejected += int(response_data.get("rejected", 0))
+                ids = response_data.get("stored_record_ids", [])
+                if isinstance(ids, list):
+                    stored_record_ids.extend(record_id for record_id in ids if isinstance(record_id, int))
+    except KeyboardInterrupt:
+        print("Stopped following Lobster Trap audit file.", file=sys.stderr)
+
+    print(
+        "Ingested "
+        f"{accepted} Lobster Trap audit records; "
+        f"rejected {rejected}; malformed lines {malformed}; "
+        f"stored IDs {stored_record_ids}."
+    )
     return 0
 
 

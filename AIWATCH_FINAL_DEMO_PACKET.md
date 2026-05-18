@@ -12,11 +12,13 @@ MCP gives agents tools, and tool definitions plus tool calls create a real trust
 
 The demo shows current AIWatch proof, not the full future Veea product. Future Veea direction may include additional adapters, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility.
 
-Optional companion framing: we use Veea Lobster Trap as the prompt/response-layer baseline and AIWatch as the MCP tool-layer extension. The immediate value is layered runtime visibility across model conversations and routed MCP tools; the future path is unified policy and audit across both layers after a real bridge is implemented and verified.
+Optional companion framing: we use Veea Lobster Trap as the prompt/response-layer baseline and AIWatch as the MCP tool-layer extension. The immediate value is layered runtime visibility across model conversations and routed MCP tools. AIWatch now has a local audit bridge for ingesting Lobster Trap JSONL audit logs into its own unified timeline; unified policy remains future work.
 
 Phase 0/1 technical bridge: AIWatch can export MCP-layer alerts and an MCP observation-plus-alert timeline into Veea-style audit JSONL envelopes as first interop primitives. This is export-only, not live Lobster Trap forwarding or a shared runtime pipeline.
 
-Phase 2 local merge artifact: AIWatch can merge its local MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file into a unified Veea-style audit timeline. This is local export/merge interop, not live runtime integration, not a shared event bus, not a shared dashboard, and not Lobster Trap ingestion.
+Phase 2 local merge artifact: AIWatch can merge its local MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file into a unified Veea-style audit timeline. This is local export/merge interop, not a shared event bus and not TerraFabric deployment.
+
+Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a local SQLite-backed unified audit timeline and show those records in the AIWatch dashboard beside AIWatch MCP-layer records. This is local integration, not a Veea cloud control plane, and AIWatch still does not inspect prompts directly.
 
 ## 3. 5-minute demo script
 
@@ -138,7 +140,7 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- eval: `39/39`
+- eval: `43/43`
 - false positives: none
 - false negatives: none
 
@@ -153,7 +155,7 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `141 passed`
+- tests: `171 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
 - second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
@@ -234,8 +236,8 @@ Does not catch:
 
 ## 7. Proof points
 
-- `pytest`: `141 passed`
-- `eval`: `39/39`
+- `pytest`: `171 passed`
+- `eval`: `43/43`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke
 - two real MCP package smokes

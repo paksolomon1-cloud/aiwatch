@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
+from app.credential_redaction import redact_json_like
 from app.schemas import AgentEvent, Alert, ToolFingerprint, ToolObservation
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -117,6 +119,35 @@ def _tool_observation_to_row(observation: ToolObservation) -> dict[str, object]:
     }
 
 
+def _utc_now_text() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _audit_record_to_row(envelope: dict[str, Any]) -> dict[str, object]:
+    sanitized = redact_json_like(envelope)
+    if not isinstance(sanitized, dict):
+        sanitized = {}
+
+    return {
+        "source": _optional_text(sanitized.get("source")) or "unknown",
+        "layer": _optional_text(sanitized.get("layer")) or "unknown",
+        "event_type": _optional_text(sanitized.get("event_type")) or "unknown",
+        "timestamp": _optional_text(sanitized.get("timestamp")),
+        "decision": _optional_text(sanitized.get("decision")),
+        "action": _optional_text(sanitized.get("action")),
+        "rule_id": _optional_text(sanitized.get("rule_id")),
+        "severity": _optional_text(sanitized.get("severity")),
+        "summary": _optional_text(sanitized.get("summary")) or "External audit record",
+        "redacted": 1 if sanitized.get("redacted", True) else 0,
+        "record_json_sanitized": json.dumps(sanitized, sort_keys=True),
+        "created_at": _utc_now_text(),
+    }
+
+
 def _event_from_row(row: sqlite3.Row) -> AgentEvent:
     return AgentEvent(
         event_id=row["event_id"],
@@ -184,6 +215,26 @@ def _tool_observation_from_row(row: sqlite3.Row) -> ToolObservation:
     )
 
 
+def _audit_record_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    record = json.loads(row["record_json_sanitized"])
+    if not isinstance(record, dict):
+        record = {}
+
+    record["id"] = row["audit_record_id"]
+    record.setdefault("source", row["source"])
+    record.setdefault("layer", row["layer"])
+    record.setdefault("event_type", row["event_type"])
+    record.setdefault("timestamp", row["timestamp"])
+    record.setdefault("decision", row["decision"])
+    record.setdefault("action", row["action"])
+    record.setdefault("rule_id", row["rule_id"])
+    record.setdefault("severity", row["severity"])
+    record.setdefault("summary", row["summary"])
+    record.setdefault("redacted", bool(row["redacted"]))
+    record["created_at"] = row["created_at"]
+    return record
+
+
 def init_db() -> None:
     with _connect() as connection:
         connection.executescript(
@@ -246,6 +297,22 @@ def init_db() -> None:
                 schema_hash TEXT NOT NULL,
                 input_schema_json TEXT NOT NULL,
                 output_schema_json TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_records (
+                audit_record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT NOT NULL,
+                layer TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                timestamp TEXT,
+                decision TEXT,
+                action TEXT,
+                rule_id TEXT,
+                severity TEXT,
+                summary TEXT NOT NULL,
+                redacted INTEGER NOT NULL,
+                record_json_sanitized TEXT NOT NULL,
+                created_at TEXT NOT NULL
             );
             """
         )
@@ -450,6 +517,49 @@ def insert_tool_observation(
         )
 
 
+def insert_audit_record(
+    envelope: dict[str, Any],
+    *,
+    connection: sqlite3.Connection | None = None,
+) -> int:
+    row = _audit_record_to_row(envelope)
+    with _connection_scope(connection) as active_connection:
+        cursor = active_connection.execute(
+            """
+            INSERT INTO audit_records (
+                source,
+                layer,
+                event_type,
+                timestamp,
+                decision,
+                action,
+                rule_id,
+                severity,
+                summary,
+                redacted,
+                record_json_sanitized,
+                created_at
+            )
+            VALUES (
+                :source,
+                :layer,
+                :event_type,
+                :timestamp,
+                :decision,
+                :action,
+                :rule_id,
+                :severity,
+                :summary,
+                :redacted,
+                :record_json_sanitized,
+                :created_at
+            )
+            """,
+            row,
+        )
+        return int(cursor.lastrowid)
+
+
 def list_events() -> list[AgentEvent]:
     with _connect() as connection:
         rows = connection.execute("SELECT * FROM events ORDER BY timestamp ASC").fetchall()
@@ -468,6 +578,26 @@ def list_tools() -> list[ToolFingerprint]:
             "SELECT * FROM tool_fingerprints ORDER BY last_seen DESC, tool_name ASC"
         ).fetchall()
     return [_tool_fingerprint_from_row(row) for row in rows]
+
+
+def list_audit_records(limit: int = 100) -> list[dict[str, Any]]:
+    safe_limit = min(max(limit, 1), 1000)
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM audit_records
+            ORDER BY COALESCE(timestamp, created_at) DESC,
+                     created_at DESC,
+                     audit_record_id DESC,
+                     source ASC,
+                     layer ASC,
+                     event_type ASC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return [_audit_record_from_row(row) for row in rows]
 
 
 def get_tool_fingerprint(
@@ -577,6 +707,7 @@ def ingest_event(event: AgentEvent) -> list[Alert]:
 def clear_db() -> None:
     init_db()
     with _connect() as connection:
+        connection.execute("DELETE FROM audit_records")
         connection.execute("DELETE FROM tool_observations")
         connection.execute("DELETE FROM tool_fingerprints")
         connection.execute("DELETE FROM alerts")

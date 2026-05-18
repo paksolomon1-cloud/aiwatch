@@ -35,8 +35,8 @@ py -3.12 eval\run_eval.py
 
 Expected current state:
 
-- pytest: `141` passing tests
-- eval: `39/39`
+- pytest: `171` passing tests
+- eval: `43/43`
 - core seed: `5 events / 7 alerts`
 - extended seed: `8 events / 10 alerts`
 - HTTP relay smoke: observes `echo_note` and `list_notes` under `fixture-http-notes-mcp` with `No alerts found.`

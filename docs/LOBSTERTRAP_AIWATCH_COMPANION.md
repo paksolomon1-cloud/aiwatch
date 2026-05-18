@@ -1,13 +1,15 @@
 # Veea Lobster Trap And AIWatch Companion Demo
 
-This note describes a bounded side-by-side demo path for Veea Lobster Trap and AIWatch. Lobster Trap is the baseline prompt/response-layer security component. AIWatch is the MCP tool-layer extension and proof point that complements it.
+This note describes a bounded companion demo path for Veea Lobster Trap and AIWatch. Lobster Trap is the baseline prompt/response-layer security component. AIWatch is the MCP tool-layer extension and proof point that complements it.
 
-It does not describe a verified live event bridge between the two projects. The current safe story is layered runtime security:
+The current safe story is layered runtime security with local audit interop:
 
 - Lobster Trap covers the conversation/model layer for OpenAI-compatible LLM traffic.
 - AIWatch covers the routed MCP tool layer.
 - AIWatch can export stored MCP-layer alerts, or an MCP observation-plus-alert timeline, as a Veea-style companion audit JSONL artifact.
 - AIWatch can merge its local MCP audit timeline with a Lobster Trap audit JSONL file into a unified Veea-style audit artifact.
+- AIWatch can ingest Lobster Trap JSONL audit logs into a local unified audit timeline shown in the AIWatch dashboard.
+- This is local integration, not TerraFabric deployment or a Veea cloud control plane.
 
 ## Baseline vs Extension
 
@@ -76,25 +78,28 @@ Lobster Trap demonstrates policy inspection at the OpenAI-compatible prompt/resp
 
 ## Current Status
 
-This is a companion discovery path, not a verified combined runtime integration.
+This is a local companion integration path, not TerraFabric deployment or a Veea cloud control plane.
 
 - AIWatch does not send events to Lobster Trap.
-- Lobster Trap does not feed events into AIWatch.
-- There is no shared dashboard or shared event bus yet.
+- Lobster Trap can write JSONL audit logs that AIWatch can ingest into its local SQLite audit store.
+- The AIWatch dashboard has a local unified audit view for AIWatch MCP-layer records and ingested Lobster Trap prompt/response-layer records.
+- There is no shared event bus, shared policy engine, deployed Veea infrastructure, or TerraFabric control plane.
 - AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts and MCP-layer timeline records.
 - AIWatch has a local file-based merge command for combining an AIWatch MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file.
+- AIWatch has a local ingestion command for posting Lobster Trap JSONL audit lines into the AIWatch backend.
 - AIWatch does not implement Lobster Trap prompt/response inspection.
 - Lobster Trap should not be described as covering MCP tool traffic unless that is separately implemented and verified.
 - Lobster Trap `serve` mode was not verified locally because no OpenAI-compatible backend was listening on `localhost:11434`.
-- The current safe demo is side-by-side operation and explanation.
+- The current safe demo is side-by-side operation plus local audit timeline ingestion.
 
 ## What Is Not Integrated Yet
 
 - No AIWatch-to-Lobster-Trap event forwarding exists.
-- No Lobster-Trap-to-AIWatch ingestion exists.
-- No shared policy engine or live shared audit timeline exists.
-- No shared dashboard panel exists.
+- No shared policy engine exists.
+- No shared event bus exists.
+- No TerraFabric deployment or Veea cloud control plane exists.
 - The unified timeline command reads local JSONL files only; it does not start Lobster Trap, call Go, call a network service, or write to a Lobster Trap ingestion API.
+- The live local ingestion command reads a local Lobster Trap JSONL file and posts each audit line to the local AIWatch backend only.
 - Lobster Trap was not verified as an MCP traffic observer.
 - AIWatch was not verified as a prompt/response proxy.
 - Live Lobster Trap proxy mode was not verified locally because no OpenAI-compatible backend was running.
@@ -262,8 +267,42 @@ Phase 2 limits:
 - It does not shell out to Lobster Trap.
 - It does not make network calls.
 - It does not forward events between projects.
-- It does not create a shared event bus, shared dashboard, shared policy engine, or Lobster Trap ingestion path.
+- It does not create a shared event bus, shared policy engine, deployed dashboard, or Lobster Trap API ingestion path.
 - It does not make AIWatch a prompt/response monitor.
+
+## Phase 3 Interop: Live Local Lobster Trap Audit Ingestion
+
+AIWatch can ingest a local Lobster Trap JSONL audit file into the AIWatch backend and show those normalized records beside AIWatch MCP-layer records in the dashboard's unified audit timeline.
+
+Start AIWatch, then ingest an existing Lobster Trap audit log:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
+```
+
+To keep reading appended audit lines during a local demo:
+
+```powershell
+py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
+The ingestion path:
+
+- reads local JSONL lines from a Lobster Trap audit file
+- posts each parsed audit object to the local AIWatch backend
+- stores sanitized normalized records in AIWatch SQLite
+- exposes them through `GET /v1/audit/timeline`
+- shows them in the AIWatch dashboard as `source: "lobstertrap"` and `layer: "llm_prompt_response"`
+
+Phase 3 limits:
+
+- It does not require Lobster Trap to be running for file ingestion.
+- It does not require Go or shell out to Lobster Trap.
+- It does not make AIWatch inspect prompts directly.
+- It does not make Lobster Trap inspect MCP traffic.
+- It does not call any external Veea/TerraFabric service or cloud control plane.
+- It does not create blocking or enforcement in AIWatch.
 
 ## Windows Setup Notes Verified Locally
 
