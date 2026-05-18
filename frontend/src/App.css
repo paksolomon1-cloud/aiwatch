@@ -352,6 +352,111 @@
   grid-column: span 8;
 }
 
+.coverage-panel {
+  grid-column: 1 / -1;
+  background:
+    linear-gradient(180deg, rgba(10, 17, 27, 0.95), rgba(7, 13, 22, 0.94)),
+    linear-gradient(90deg, rgba(77, 200, 255, 0.05), transparent 62%);
+}
+
+.coverage-panel .section-heading {
+  margin-bottom: 0.55rem;
+}
+
+.coverage-intro {
+  max-width: 86rem;
+  margin: 0 0 0.9rem;
+}
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.coverage-section {
+  min-width: 0;
+  border-top: 1px solid rgba(77, 200, 255, 0.18);
+  padding-top: 0.75rem;
+}
+
+.coverage-section h4 {
+  margin: 0.58rem 0 0.5rem;
+  font-size: 0.98rem;
+}
+
+.coverage-section p,
+.coverage-section li {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.coverage-section p {
+  margin: 0 0 0.55rem;
+}
+
+.coverage-section ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.coverage-section li + li {
+  margin-top: 0.32rem;
+}
+
+.coverage-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detects-badge,
+.routing-badge {
+  border-color: rgba(77, 200, 255, 0.28);
+  background: rgba(77, 200, 255, 0.09);
+  color: #d9f6ff;
+}
+
+.deny-badge,
+.scope-badge {
+  border-color: rgba(255, 209, 102, 0.28);
+  background: rgba(255, 209, 102, 0.1);
+  color: #ffe28a;
+}
+
+.prompt-badge {
+  border-color: rgba(255, 159, 67, 0.3);
+  background: rgba(255, 159, 67, 0.1);
+  color: #ffbd86;
+}
+
+.coverage-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  margin-top: 0.7rem;
+}
+
+.coverage-command-list code {
+  display: block;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(30, 49, 71, 0.85);
+  background: rgba(5, 10, 18, 0.78);
+  color: #d9f6ff;
+  padding: 0.48rem 0.55rem;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .registry-panel .tool-preview-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1301,6 +1406,7 @@ pre {
   }
 
   .stat-panel,
+  .coverage-panel,
   .methodology-panel,
   .proof-panel,
   .guide-panel,
@@ -1315,6 +1421,7 @@ pre {
   .detail-grid,
   .severity-grid,
   .proof-grid,
+  .coverage-grid,
   .audit-integration-strip,
   .audit-source-layer-grid,
   .audit-summary-grid,

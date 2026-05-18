@@ -1065,9 +1065,104 @@ function App() {
     )
   }
 
+  function renderCoverageControls() {
+    return (
+      <section className="panel coverage-panel" aria-labelledby="coverage-controls-heading">
+        <div className="section-heading">
+          <div>
+            <span className="panel-label">Hackathon demo map</span>
+            <h3 id="coverage-controls-heading">Coverage / Controls</h3>
+          </div>
+          <span className="source-badge source-aiwatch">Local unified audit</span>
+        </div>
+
+        <p className="muted-copy small-copy coverage-intro">
+          AIWatch observes routed MCP tool traffic through its wrapper or local relay. Lobster Trap covers
+          prompt/response audit records. AIWatch ingests Lobster Trap records locally and correlates both
+          layers in Unified Audit.
+        </p>
+
+        <div className="coverage-grid">
+          <div className="coverage-section">
+            <span className="coverage-badge detects-badge">Detects</span>
+            <h4>AIWatch checks</h4>
+            <ul>
+              <li>Routed MCP tool calls</li>
+              <li>Tool registry drift</li>
+              <li>Tool name shadowing</li>
+              <li>Poisoned MCP descriptions</li>
+              <li>Credential-shaped tool-call parameters</li>
+              <li>Manually quarantined tools</li>
+            </ul>
+          </div>
+
+          <div className="coverage-section">
+            <span className="coverage-badge deny-badge">Can deny</span>
+            <h4>AIWatch can stop</h4>
+            <p>
+              AIWatch can optionally deny selected high-risk or manually quarantined routed MCP tool calls
+              before forwarding when enforcement mode is enabled.
+            </p>
+            <ul>
+              <li>R-MCP-005 credential-shaped routed tool calls in opt-in deny mode</li>
+              <li>Future routed calls to manually quarantined tools in opt-in deny mode</li>
+            </ul>
+          </div>
+
+          <div className="coverage-section">
+            <span className="coverage-badge prompt-badge">Prompt layer</span>
+            <h4>Lobster Trap checks</h4>
+            <p>
+              Lobster Trap covers the prompt/response layer. AIWatch ingests Lobster Trap audit records
+              locally.
+            </p>
+            <ul>
+              <li>Prompt/response audit records</li>
+              <li>Prompt-injection or policy decisions when LLM traffic is routed through Lobster Trap</li>
+              <li>Audit JSONL records ingested or tailed into AIWatch&apos;s local Unified Audit</li>
+            </ul>
+          </div>
+
+          <div className="coverage-section">
+            <span className="coverage-badge routing-badge">Requires routing</span>
+            <h4>Requires routing/config</h4>
+            <ul>
+              <li>MCP traffic must go through the AIWatch stdio wrapper or local HTTP MCP relay</li>
+              <li>LLM traffic must go through Lobster Trap for live prompt/response audit coverage</li>
+              <li>Lobster Trap audit JSONL must be ingested or tailed into AIWatch</li>
+              <li>
+                Enforcement requires <code>AIWATCH_ENFORCEMENT_MODE=deny</code>
+              </li>
+            </ul>
+            <div className="coverage-command-list">
+              <code>py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330</code>
+              <code>py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file &lt;jsonl&gt; --backend-url http://127.0.0.1:7330 --follow</code>
+              <code>py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330</code>
+            </div>
+          </div>
+
+          <div className="coverage-section">
+            <span className="coverage-badge scope-badge">Out of scope</span>
+            <h4>Out of scope</h4>
+            <ul>
+              <li>Global Claude or Cursor coverage</li>
+              <li>Shell commands outside MCP</li>
+              <li>File edits outside MCP</li>
+              <li>Hidden reasoning</li>
+              <li>Laptop or arbitrary network coverage</li>
+              <li>Guaranteed blocking of all exfiltration</li>
+              <li>Enterprise proxy readiness claims</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   function renderOverview() {
     return (
       <div className="page-grid overview-grid">
+        {renderCoverageControls()}
 
         <section className="panel methodology-panel">
           <span className="panel-label">Audit surface</span>
