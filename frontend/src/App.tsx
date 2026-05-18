@@ -51,6 +51,9 @@ interface ReplayLoadOptions {
   silent?: boolean
 }
 
+const DEMO_LOBSTERTRAP_INGEST_COMMAND =
+  'py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330'
+
 const severityOrder: Record<Severity, number> = {
   critical: 4,
   high: 3,
@@ -137,16 +140,31 @@ function getAuditActionText(record: AuditTimelineRecord): string {
   return record.action ?? record.decision ?? 'n/a'
 }
 
+function getAuditBreakdownCount(
+  summary: AuditSummaryResponse | null,
+  source: string,
+  layer: string,
+  fallback: number,
+): number {
+  const match = summary?.source_layer_breakdown.find(
+    (item) => item.source === source && item.layer === layer,
+  )
+
+  return match?.count ?? fallback
+}
+
 function isLobsterTrapRiskRecord(record: AuditTimelineRecord): boolean {
   if (record.source !== 'lobstertrap') {
     return false
   }
 
-  const action = String(record.action ?? '').toUpperCase()
-  const decision = String(record.decision ?? '').toLowerCase()
+  const action = String(record.action ?? '')
+  const decision = String(record.decision ?? '')
+  const riskValues = [action, decision].map((value) => value.toUpperCase())
+
   return (
-    ['DENY', 'HUMAN_REVIEW', 'QUARANTINE'].includes(action) ||
-    ['block', 'review', 'quarantine'].includes(decision)
+    riskValues.some((value) => ['DENY', 'HUMAN_REVIEW', 'QUARANTINE'].includes(value)) ||
+    riskValues.some((value) => ['BLOCK', 'REVIEW'].includes(value))
   )
 }
 
@@ -1198,6 +1216,25 @@ function App() {
       ['Review / quarantine', auditSummary?.human_review_quarantine_count ?? 0],
       ['Redacted', auditSummary?.redacted_count ?? auditTimeline.filter((record) => record.redacted).length],
     ]
+    const sourceLayerBreakdown = [
+      {
+        label: 'Lobster Trap / LLM prompt-response',
+        count: getAuditBreakdownCount(
+          auditSummary,
+          'lobstertrap',
+          'llm_prompt_response',
+          lobstertrapAuditCount,
+        ),
+        source: 'Lobster Trap prompt/response audit records',
+        layer: 'LLM prompt-response',
+      },
+      {
+        label: 'AIWatch / MCP tool',
+        count: getAuditBreakdownCount(auditSummary, 'aiwatch', 'mcp_tool', aiwatchAuditCount),
+        source: 'AIWatch routed MCP tool records',
+        layer: 'MCP tool',
+      },
+    ]
 
     return (
       <div className="page-grid audit-grid">
@@ -1213,14 +1250,35 @@ function App() {
             </div>
           </div>
 
+          <div className="audit-integration-strip" aria-label="Unified audit integration status">
+            <div className="audit-integration-card">
+              <span>Local Lobster Trap ingestion</span>
+              <strong>audit records accepted into AIWatch</strong>
+            </div>
+            <div className="audit-integration-card">
+              <span>AIWatch MCP layer</span>
+              <strong>routed tool activity</strong>
+            </div>
+            <div className="audit-integration-card">
+              <span>Correlation</span>
+              <strong>grouped by correlation_id / trace_id / session_id / request_id</strong>
+            </div>
+          </div>
+
           <div className="info-card audit-boundary-card">
             <p className="muted-copy small-copy">
-              AIWatch MCP records + Lobster Trap prompt/response audit records in one local timeline.
-              Lobster Trap covers prompt/response audit logs; AIWatch covers routed MCP tool traffic.
+              Local unified audit timeline with Lobster Trap prompt/response audit records and AIWatch
+              routed MCP tool records in one local view.
             </p>
             <p className="muted-copy small-copy">
+              This is local Lobster Trap + AIWatch integration, not TerraFabric cloud deployment.
               Local integration, not TerraFabric deployment.
             </p>
+          </div>
+
+          <div className="audit-code-strip">
+            <span>Demo ingestion</span>
+            <code>{DEMO_LOBSTERTRAP_INGEST_COMMAND}</code>
           </div>
 
           <div className="audit-summary-grid">
@@ -1236,15 +1294,31 @@ function App() {
             </div>
           </div>
 
+          <div className="audit-source-layer-grid" aria-label="Source and layer breakdown">
+            {sourceLayerBreakdown.map((item) => (
+              <div key={item.label} className="audit-source-layer-card">
+                <div>
+                  <span className="panel-label">{item.label}</span>
+                  <strong>{item.count}</strong>
+                </div>
+                <p className="muted-copy small-copy">
+                  {item.source}
+                  <span aria-hidden="true"> · </span>
+                  {item.layer}
+                </p>
+              </div>
+            ))}
+          </div>
+
           <div className="info-card audit-correlation-card">
             <div className="section-heading compact-heading">
               <div>
-                <span className="panel-label">Local cross-layer audit correlation</span>
+                <span className="panel-label">Cross-layer correlation</span>
                 <h3>{auditIncidentGroups.length} grouped incidents</h3>
               </div>
             </div>
             <p className="muted-copy small-copy">
-              Grouped by local session/request metadata when present.
+              Cross-layer correlation is grouped by local correlation/session metadata when present.
             </p>
 
             {auditIncidentGroups.length === 0 ? (
@@ -1263,10 +1337,21 @@ function App() {
                     <div className="timeline-title">
                       <div>
                         <strong>{group.label}</strong>
-                        <p className="muted-copy small-copy mono-inline wrap-anywhere">{group.key}</p>
+                        <p className="muted-copy small-copy mono-inline wrap-anywhere">
+                          correlation/session key: {group.key}
+                        </p>
                       </div>
-                      <span className="live-count-chip">{formatTimestamp(group.latestAt)}</span>
+                      <div className="audit-group-meta">
+                        <span className="audit-group-meta-label">sources present</span>
+                        <span className="source-badge source-aiwatch">AIWatch</span>
+                        <span className="source-badge source-lobstertrap">Lobster Trap</span>
+                        <span className="live-count-chip">{group.records.length} records</span>
+                        <span className="live-count-chip">{formatTimestamp(group.latestAt)}</span>
+                      </div>
                     </div>
+                    <p className="muted-copy small-copy">
+                      Prompt-layer policy decision + MCP tool-layer activity observed in same local correlation group.
+                    </p>
                     <div className="incident-record-list">
                       {group.records.slice(0, 4).map((record, index) => (
                         <div key={getAuditRecordKey(record, index)} className="incident-record">
@@ -1289,7 +1374,7 @@ function App() {
 
           {auditTimeline.length === 0 ? (
             <p className="empty-state">
-              No unified audit records yet. Ingest a Lobster Trap JSONL audit file or generate AIWatch MCP activity to populate this local timeline.
+              No unified audit records yet. Run <code>{DEMO_LOBSTERTRAP_INGEST_COMMAND}</code> or generate AIWatch MCP activity to populate this local timeline.
             </p>
           ) : (
             <div className="table-scroll">
@@ -1299,10 +1384,10 @@ function App() {
                     <th>Timestamp</th>
                     <th>Source</th>
                     <th>Layer</th>
-                    <th>Decision</th>
-                    <th>Rule</th>
-                    <th>Evidence</th>
-                    <th>Correlation</th>
+                    <th>Decision / action</th>
+                    <th>Rule ID</th>
+                    <th>Redacted</th>
+                    <th>Correlation / session</th>
                     <th>Summary</th>
                   </tr>
                 </thead>

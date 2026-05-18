@@ -798,6 +798,57 @@ input {
   gap: 0.35rem;
 }
 
+.audit-integration-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.audit-integration-card,
+.audit-source-layer-card,
+.audit-code-strip {
+  min-width: 0;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(77, 200, 255, 0.16);
+  background: rgba(7, 16, 27, 0.76);
+}
+
+.audit-integration-card {
+  padding: 0.72rem 0.78rem;
+}
+
+.audit-integration-card span,
+.audit-code-strip span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.audit-integration-card strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.audit-code-strip {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.62rem 0.78rem;
+}
+
+.audit-code-strip code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .audit-summary-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -832,8 +883,50 @@ input {
   grid-column: span 2;
 }
 
+.audit-source-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.audit-source-layer-card {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.78rem;
+}
+
+.audit-source-layer-card strong {
+  display: block;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.audit-source-layer-card p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .audit-correlation-card {
   gap: 0.65rem;
+}
+
+.audit-group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.audit-group-meta-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  align-self: center;
 }
 
 .incident-list,
@@ -1141,8 +1234,15 @@ pre {
   .detail-grid,
   .severity-grid,
   .proof-grid,
+  .audit-integration-strip,
+  .audit-source-layer-grid,
   .audit-summary-grid,
   .credential-finding {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-code-strip,
+  .audit-source-layer-card {
     grid-template-columns: 1fr;
   }
 
