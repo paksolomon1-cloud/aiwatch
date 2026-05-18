@@ -16,6 +16,8 @@ Optional companion framing: we use Veea Lobster Trap as the prompt/response-laye
 
 Phase 0/1 technical bridge: AIWatch can export MCP-layer alerts and an MCP observation-plus-alert timeline into Veea-style audit JSONL envelopes as first interop primitives. This is export-only, not live Lobster Trap forwarding or a shared runtime pipeline.
 
+Phase 2 local merge artifact: AIWatch can merge its local MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file into a unified Veea-style audit timeline. This is local export/merge interop, not live runtime integration, not a shared event bus, not a shared dashboard, and not Lobster Trap ingestion.
+
 ## 3. 5-minute demo script
 
 ### Open dashboard

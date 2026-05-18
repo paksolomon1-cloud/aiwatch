@@ -12,8 +12,10 @@ from typing import Any, Sequence
 
 from app.storage import clear_db, init_db, list_alerts as list_local_alerts, list_events as list_local_events
 from app.veea_audit import (
+    build_unified_veea_audit_timeline,
     build_veea_audit_envelopes,
     build_veea_audit_timeline,
+    read_jsonl_objects,
     render_veea_audit_jsonl,
     write_veea_audit_jsonl,
 )
@@ -347,6 +349,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     export_parser.set_defaults(handler=handle_export_veea_audit)
 
+    merge_parser = subparsers.add_parser(
+        "merge-veea-audit",
+        help="Merge AIWatch and Lobster Trap JSONL audit artifacts into one local Veea-style timeline.",
+    )
+    merge_parser.add_argument("--aiwatch", type=Path, help="Existing AIWatch Veea timeline JSONL file.")
+    merge_parser.add_argument("--lobstertrap", type=Path, help="Lobster Trap JSONL audit file.")
+    merge_parser.add_argument("--out", type=Path, help="Write merged JSONL to this file instead of stdout.")
+    merge_parser.set_defaults(handler=handle_merge_veea_audit)
+
     return parser
 
 
@@ -484,6 +495,26 @@ def handle_export_veea_audit(args: argparse.Namespace) -> int:
 
     sys.stdout.write(render_veea_audit_jsonl(envelopes))
     print(f"Exported {len(envelopes)} {record_label} to stdout.", file=sys.stderr)
+    return 0
+
+
+def handle_merge_veea_audit(args: argparse.Namespace) -> int:
+    if args.aiwatch is None and args.lobstertrap is None:
+        print("Provide --aiwatch, --lobstertrap, or both.", file=sys.stderr)
+        return 2
+
+    aiwatch_envelopes = read_jsonl_objects(args.aiwatch) if args.aiwatch is not None else []
+    lobstertrap_records = read_jsonl_objects(args.lobstertrap) if args.lobstertrap is not None else []
+    envelopes = build_unified_veea_audit_timeline(aiwatch_envelopes, lobstertrap_records)
+
+    if args.out:
+        output_path = Path(args.out)
+        write_veea_audit_jsonl(envelopes, output_path)
+        print(f"Merged {len(envelopes)} Veea audit timeline records to {output_path}.")
+        return 0
+
+    sys.stdout.write(render_veea_audit_jsonl(envelopes))
+    print(f"Merged {len(envelopes)} Veea audit timeline records to stdout.", file=sys.stderr)
     return 0
 
 

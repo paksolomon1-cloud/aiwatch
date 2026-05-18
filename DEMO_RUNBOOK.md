@@ -124,6 +124,19 @@ Say:
 These JSONL files are the first technical bridge: AIWatch exports MCP-layer alerts and an MCP observation timeline into Veea-style audit envelopes. They are export artifacts, not live forwarding to Lobster Trap and not a shared runtime pipeline yet.
 ```
 
+If you already have a Lobster Trap audit JSONL file, merge it with the AIWatch MCP audit timeline as a local unified Veea-style artifact:
+
+```powershell
+py -3.12 scripts\aiwatch.py merge-veea-audit --aiwatch veea-aiwatch-timeline.jsonl --lobstertrap C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --out veea-unified-timeline.jsonl
+Get-Content .\veea-unified-timeline.jsonl -TotalCount 10
+```
+
+Say:
+
+```text
+This unified file is local export/merge interop. Lobster Trap remains the prompt/response inspection layer; AIWatch remains the routed MCP tool layer. This is not live forwarding, not a shared event bus, not a shared dashboard, and not Lobster Trap ingestion.
+```
+
 Say:
 
 ```text

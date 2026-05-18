@@ -9,9 +9,12 @@ from app.detector import detect_alerts
 from app.schemas import ActionType, AgentEvent, Source
 from app.storage import clear_db, ingest_event, init_db, list_alerts, list_events
 from app.veea_audit import (
+    build_unified_veea_audit_timeline,
     build_veea_audit_envelopes,
     build_veea_audit_timeline,
     build_veea_observation_envelopes,
+    lobstertrap_record_to_veea_audit_envelope,
+    render_veea_audit_jsonl,
 )
 
 
@@ -48,6 +51,10 @@ def _credential_tool_call_event(raw_secret: str) -> AgentEvent:
             },
         },
     )
+
+
+def _secret(*parts: str) -> str:
+    return "".join(parts)
 
 
 def test_veea_audit_mapper_exports_mcp_alert_envelope() -> None:
@@ -258,3 +265,196 @@ def test_export_veea_audit_cli_timeline_handles_empty_database(
     assert "Exported 0 AIWatch MCP audit timeline records" in output
 
     clear_db()
+
+
+def test_lobstertrap_deny_audit_record_maps_to_prompt_response_envelope() -> None:
+    record = {
+        "timestamp": "2026-05-17T12:00:01Z",
+        "request_id": "req-deny-1",
+        "direction": "ingress",
+        "action": "DENY",
+        "rule_name": "block_prompt_injection",
+        "deny_message": "[LOBSTER TRAP] Blocked: prompt injection detected.",
+        "metadata": {
+            "intent_category": "system",
+            "risk_score": 0.92,
+            "contains_injection_patterns": True,
+        },
+        "declared_headers": {"agent_id": "agent-demo"},
+        "mismatches": [],
+    }
+
+    envelope = lobstertrap_record_to_veea_audit_envelope(record)
+
+    assert envelope["schema"] == "veea.lobstertrap.audit.v1"
+    assert envelope["source"] == "lobstertrap"
+    assert envelope["layer"] == "llm_prompt_response"
+    assert envelope["event_type"] == "llm_inspection"
+    assert envelope["timestamp"] == "2026-05-17T12:00:01Z"
+    assert envelope["request_id"] == "req-deny-1"
+    assert envelope["direction"] == "ingress"
+    assert envelope["action"] == "DENY"
+    assert envelope["decision"] == "block"
+    assert envelope["rule_id"] == "block_prompt_injection"
+    assert envelope["agent_id"] == "agent-demo"
+    assert envelope["redacted"] is True
+    assert envelope["evidence"]["metadata"]["contains_injection_patterns"] is True
+    assert envelope["lobstertrap"] == {
+        "request_id": "req-deny-1",
+        "direction": "ingress",
+        "detector": "deterministic_prompt_response",
+    }
+
+
+def test_lobstertrap_allow_audit_record_maps_to_allow_decision() -> None:
+    envelope = lobstertrap_record_to_veea_audit_envelope(
+        {
+            "timestamp": "2026-05-17T12:00:02Z",
+            "request_id": "req-allow-1",
+            "direction": "egress",
+            "action": "ALLOW",
+            "metadata": {"intent_category": "general", "risk_score": 0.0},
+            "token_count": 8,
+        }
+    )
+
+    assert envelope["decision"] == "allow"
+    assert envelope["rule_id"] is None
+    assert envelope["summary"] == "Lobster Trap prompt/response inspection; direction=egress; action=ALLOW"
+    assert envelope["evidence"]["token_count"] == 8
+
+
+def test_lobstertrap_audit_record_tolerates_missing_optional_fields() -> None:
+    envelope = lobstertrap_record_to_veea_audit_envelope({"action": "LOG"})
+
+    assert "timestamp" not in envelope
+    assert envelope["decision"] == "log"
+    assert envelope["request_id"] is None
+    assert envelope["direction"] is None
+    assert envelope["rule_id"] is None
+    assert envelope["redacted"] is True
+
+
+def test_lobstertrap_audit_evidence_is_redacted_without_raw_secret() -> None:
+    raw_secret = _secret("sk-", "LOBSTERTRAP", "1234567890", "ABCDEF1234567890")
+    envelope = lobstertrap_record_to_veea_audit_envelope(
+        {
+            "timestamp": "2026-05-17T12:00:03Z",
+            "request_id": "req-secret-1",
+            "direction": "ingress",
+            "action": "DENY",
+            "rule_name": "block_credentials",
+            "prompt": raw_secret,
+            "metadata": {"contains_credentials": True},
+        }
+    )
+    rendered = json.dumps(envelope, sort_keys=True)
+
+    assert raw_secret not in rendered
+    assert "[REDACTED:OPENAI_KEY]" in rendered
+    assert envelope["redacted"] is True
+
+
+def test_unified_veea_timeline_merges_aiwatch_and_lobstertrap_in_deterministic_order() -> None:
+    aiwatch_envelopes = [
+        {
+            "schema": "veea.aiwatch.audit.v1",
+            "source": "aiwatch",
+            "layer": "mcp_tool",
+            "event_type": "security_alert",
+            "timestamp": "2026-05-17T12:00:02Z",
+            "aiwatch": {"alert_id": "alert-2"},
+        },
+        {
+            "schema": "veea.aiwatch.audit.v1",
+            "source": "aiwatch",
+            "layer": "mcp_tool",
+            "event_type": "mcp_observation",
+            "timestamp": "2026-05-17T12:00:01Z",
+            "aiwatch": {"event_id": "event-1"},
+        },
+    ]
+    lobstertrap_records = [
+        {
+            "timestamp": "2026-05-17T12:00:01Z",
+            "request_id": "req-1",
+            "direction": "ingress",
+            "action": "ALLOW",
+        },
+        {
+            "request_id": "req-no-time",
+            "direction": "egress",
+            "action": "ALLOW",
+        },
+    ]
+
+    timeline = build_unified_veea_audit_timeline(aiwatch_envelopes, lobstertrap_records)
+
+    assert [(record["source"], record["event_type"], record.get("request_id")) for record in timeline] == [
+        ("aiwatch", "mcp_observation", None),
+        ("lobstertrap", "llm_inspection", "req-1"),
+        ("aiwatch", "security_alert", None),
+        ("lobstertrap", "llm_inspection", "req-no-time"),
+    ]
+
+
+def test_merge_veea_audit_cli_writes_unified_jsonl(tmp_path: Path, capsys) -> None:
+    aiwatch_path = tmp_path / "veea-aiwatch-timeline.jsonl"
+    lobstertrap_path = tmp_path / "lobstertrap-audit.jsonl"
+    output_path = tmp_path / "veea-unified-timeline.jsonl"
+    raw_secret = _secret("Bearer ", "LOBSTERTRAP", "1234567890", "ABCDEF")
+
+    aiwatch_path.write_text(
+        render_veea_audit_jsonl(
+            [
+                {
+                    "schema": "veea.aiwatch.audit.v1",
+                    "source": "aiwatch",
+                    "layer": "mcp_tool",
+                    "event_type": "mcp_observation",
+                    "timestamp": "2026-05-17T12:00:02Z",
+                    "aiwatch": {"event_id": "event-2"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    lobstertrap_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-05-17T12:00:01Z",
+                "request_id": "req-1",
+                "direction": "ingress",
+                "action": "DENY",
+                "rule_name": "block_prompt_injection",
+                "prompt": raw_secret,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert cli_main(
+        [
+            "merge-veea-audit",
+            "--aiwatch",
+            str(aiwatch_path),
+            "--lobstertrap",
+            str(lobstertrap_path),
+            "--out",
+            str(output_path),
+        ]
+    ) == 0
+
+    output = capsys.readouterr().out
+    lines = output_path.read_text(encoding="utf-8").splitlines()
+    payloads = [json.loads(line) for line in lines]
+    rendered = "\n".join(lines)
+
+    assert f"Merged 2 Veea audit timeline records to {output_path}." in output
+    assert [payload["source"] for payload in payloads] == ["lobstertrap", "aiwatch"]
+    assert payloads[0]["schema"] == "veea.lobstertrap.audit.v1"
+    assert payloads[0]["decision"] == "block"
+    assert raw_secret not in rendered
+    assert "[REDACTED:BEARER_TOKEN]" in rendered
