@@ -2,7 +2,7 @@
 
 AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
-HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 ## Smoke
 

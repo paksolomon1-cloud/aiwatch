@@ -620,6 +620,8 @@ def test_deny_mode_allows_safe_tools_call(monkeypatch, tmp_path) -> None:
     assert json.loads(body)["result"]["isError"] is False
     assert len(upstream_calls) == 1
     assert "enforcement" not in backend_events[0]["action_params"]
+    assert "credential_findings" not in backend_events[0]["action_params"]
+    assert backend_events[0]["action_params"]["arguments"] == {"query": "release notes"}
 
 
 def test_tools_list_request_and_json_response_create_tool_register_events() -> None:

@@ -5,6 +5,8 @@ import urllib.error
 from pathlib import Path
 
 from app.cli import (
+    DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY,
+    build_demo_blocked_mcp_attack_result,
     build_eval_command,
     build_parser,
     build_tap_demo_command,
@@ -42,6 +44,7 @@ def test_parser_recognizes_other_commands() -> None:
     parser = build_parser()
 
     assert parser.parse_args(["clear"]).command == "clear"
+    assert parser.parse_args(["demo-blocked-mcp-attack"]).command == "demo-blocked-mcp-attack"
     assert parser.parse_args(["tap-demo"]).command == "tap-demo"
     assert parser.parse_args(["eval"]).command == "eval"
     assert parser.parse_args(["doctor"]).command == "doctor"
@@ -77,6 +80,7 @@ def test_help_text_lists_supported_commands() -> None:
 
     assert "demo-seed" in help_text
     assert "demo-seed-unified" in help_text
+    assert "demo-blocked-mcp-attack" in help_text
     assert "clear" in help_text
     assert "tap-demo" in help_text
     assert "eval" in help_text
@@ -412,6 +416,65 @@ def test_enforcement_status_defaults_to_observe(monkeypatch, capsys) -> None:
     assert "local MCP relay/wrapper traffic only" in output
 
 
+def test_demo_blocked_mcp_attack_posts_redacted_deny_event_without_upstream(monkeypatch) -> None:
+    requests: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        requests.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        return {"status": "ok", "event_id": body["event_id"], "alerts_created": 1, "alerts": []}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    result = build_demo_blocked_mcp_attack_result(backend_url="http://127.0.0.1:7330")
+
+    assert result["action"] == "deny"
+    assert result["enforcement_mode"] == "deny"
+    assert result["rule_id"] == "R-MCP-005"
+    assert "credential-shaped routed mcp tool-call parameter" in str(result["reason"]).lower()
+    assert result["upstream_contacted"] is False
+    assert result["upstream"]["contacted"] is False
+    assert result["alerts_created"] == 1
+
+    assert len(requests) == 1
+    [request] = requests
+    assert request["path"] == "/v1/events"
+    assert request["method"] == "POST"
+    assert request["backend_url"] == "http://127.0.0.1:7330"
+
+    body = request["body"]
+    assert body["source"] == "mcp"
+    assert body["action_type"] == "tool_call"
+    assert body["action_params"]["tool_name"] == "export_notes"
+    assert body["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
+    assert body["action_params"]["enforcement"] == {
+        "action": "deny",
+        "enforcement_mode": "deny",
+        "rule_id": "R-MCP-005",
+        "reason": "Credential-shaped value in MCP tools/call parameters",
+    }
+
+    rendered_result = json.dumps(result, sort_keys=True)
+    rendered_request = json.dumps(requests, sort_keys=True)
+    assert DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY == "sk-demo-REDACTED-000000000000"
+    assert DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY not in rendered_result
+    assert DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY not in rendered_request
+
+
+def test_demo_blocked_mcp_attack_cli_prints_json_result(monkeypatch, capsys) -> None:
+    def fake_request_json(_path, *, backend_url, method="GET", body=None):
+        return {"status": "ok", "event_id": body["event_id"], "alerts_created": 1, "alerts": []}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["demo-blocked-mcp-attack", "--backend-url", "http://127.0.0.1:7330"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["action"] == "deny"
+    assert payload["enforcement_mode"] == "deny"
+    assert payload["rule_id"] == "R-MCP-005"
+    assert payload["upstream_contacted"] is False
+
+
 def test_quarantine_tool_cli_posts_selector_and_prints_rows(monkeypatch, capsys) -> None:
     requests: list[dict[str, object]] = []
 
@@ -507,24 +570,28 @@ def test_unquarantine_and_quarantined_tools_cli_use_expected_endpoints(monkeypat
     assert "Unquarantined MCP tools: 1" in output
 
 
-def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
+def test_phrase_guard_docs_do_not_add_forbidden_product_claims() -> None:
     root_dir = Path(__file__).resolve().parents[2]
-    docs = [
+    checked_paths = [
         root_dir / "README.md",
+        root_dir / "QUICKSTART_DEMO.md",
+        root_dir / "DEMO_SCRIPT.md",
         root_dir / "THREAT_MODEL.md",
         root_dir / "NON_GOALS.md",
         root_dir / "DEMO_RUNBOOK.md",
+        root_dir / "AIWATCH_FINAL_DEMO_PACKET.md",
+        root_dir / "AIWATCH_NEXT_PHASE_SPEC.md",
+        root_dir / "AIWATCH_VEEA_HACKATHON_SEQUENCE.md",
+        root_dir / "backend" / "README.md",
     ]
-    enforcement_lines = "\n".join(
-        line
-        for path in docs
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if (
-            "enforcement" in line.lower()
-            or "deny mode" in line.lower()
-            or "quarantine" in line.lower()
-            or "R-MCP-005" in line
-        )
+    checked_paths.extend(sorted((root_dir / "docs").glob("*.md")))
+    checked_paths.extend(sorted((root_dir / "frontend" / "src").glob("*.tsx")))
+    checked_paths.extend(sorted((root_dir / "frontend" / "src").glob("*.ts")))
+
+    checked_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in checked_paths
+        if path.exists()
     )
     forbidden_phrases = [
         "live Veea platform integration",
@@ -534,6 +601,7 @@ def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
         "actual TerraFabric control plane",
         "AIWatch monitors prompts",
         "AIWatch watches prompts",
+        "AIWatch detects prompt injection directly",
         "Lobster Trap monitors MCP",
         "monitors Claude",
         "monitors Cursor",
@@ -542,7 +610,9 @@ def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
         "all secrets are caught",
         "production-ready proxy",
         "production shared dashboard",
+        "shuts down malicious tools everywhere",
+        "blocks malicious tools globally",
     ]
 
     for phrase in forbidden_phrases:
-        assert phrase not in enforcement_lines
+        assert phrase not in checked_text

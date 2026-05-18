@@ -126,7 +126,7 @@ Use this wording:
 - The local HTTP MCP relay is experimental, local-only, MCP-specific, and limited to a POST JSON request/response subset.
 - Claude Code-routed MCP traffic can be observed when Claude Code launches an MCP server through the local stdio MCP wrapper.
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude internals, Cursor internals, or arbitrary local process activity.
-- This is not a production-ready proxy, does not implement full Streamable HTTP, SSE, GET stream handling, or generic HTTP proxying, and does not guarantee all secrets are caught.
+- This is not a production-grade proxy, does not implement full Streamable HTTP, SSE, GET stream handling, or generic HTTP proxying, and does not guarantee every secret is detected.
 
 ## B. CLI-Only Demo
 
@@ -359,7 +359,7 @@ Expected:
 - server ID: `fixture-http-notes-mcp`
 - alerts: `No alerts found.`
 
-Scope: this is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+Scope: this is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 ## Regression Checks
 

@@ -12,7 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
-from app.enforcement import ENFORCEMENT_ENV_VAR, resolve_enforcement_mode
+from app.enforcement import (
+    DENY_RULE_ID,
+    ENFORCEMENT_ENV_VAR,
+    ENFORCEMENT_MODE_DENY,
+    annotate_enforcement_decision,
+    evaluate_enforcement,
+    resolve_enforcement_mode,
+)
+from app.mcp_normalizer import normalize_tools_call_frame
 from app.storage import clear_db, init_db, list_alerts as list_local_alerts, list_events as list_local_events
 from app.veea_audit import (
     build_unified_veea_audit_timeline,
@@ -39,6 +47,10 @@ LOBSTERTRAP_LIVE_INGEST_EXPLANATION = (
     "Lobster Trap prompt/response audit records are being ingested into "
     "AIWatch's local unified audit timeline."
 )
+DEMO_BLOCKED_MCP_ATTACK_SESSION_ID = "demo-blocked-mcp-attack"
+DEMO_BLOCKED_MCP_ATTACK_SERVER_ID = "demo-attack-notes-mcp"
+DEMO_BLOCKED_MCP_ATTACK_TOOL_NAME = "export_notes"
+DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY = "sk-demo-REDACTED-000000000000"
 
 
 @dataclass(frozen=True)
@@ -349,6 +361,13 @@ def build_parser() -> argparse.ArgumentParser:
     demo_seed_unified_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     demo_seed_unified_parser.set_defaults(handler=handle_demo_seed_unified)
 
+    demo_blocked_mcp_attack_parser = subparsers.add_parser(
+        "demo-blocked-mcp-attack",
+        help="Record a deterministic opt-in deny-mode MCP tools/call denial demo.",
+    )
+    demo_blocked_mcp_attack_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    demo_blocked_mcp_attack_parser.set_defaults(handler=handle_demo_blocked_mcp_attack)
+
     tap_demo_parser = subparsers.add_parser("tap-demo", help="Run the stdio tap demo.")
     tap_demo_parser.set_defaults(handler=handle_tap_demo)
 
@@ -604,6 +623,128 @@ def handle_demo_seed_unified(args: argparse.Namespace) -> int:
         )
     else:
         print("Final audit summary: unavailable.")
+    return 0
+
+
+def _build_demo_blocked_mcp_attack_frame() -> dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": "demo-blocked-mcp-attack-call-001",
+        "method": "tools/call",
+        "params": {
+            "name": DEMO_BLOCKED_MCP_ATTACK_TOOL_NAME,
+            "arguments": {
+                "api_key": DEMO_BLOCKED_MCP_ATTACK_FAKE_API_KEY,
+                "format": "json",
+                "destination": "local-demo-redacted",
+            },
+        },
+    }
+
+
+def _demo_mcp_denial_response(frame: dict[str, Any], decision: Any) -> dict[str, Any]:
+    denial_label = decision.rule_id or decision.reason or "manual_enforcement"
+    data: dict[str, object] = {
+        "enforcement_mode": decision.enforcement_mode,
+        "reason": decision.reason,
+    }
+    if decision.rule_id is not None:
+        data["rule_id"] = decision.rule_id
+    if decision.tool_name is not None:
+        data["tool_name"] = decision.tool_name
+    if decision.tool_fingerprint is not None:
+        data["tool_fingerprint"] = decision.tool_fingerprint
+    if decision.quarantine_reason is not None:
+        data["quarantine_reason"] = decision.quarantine_reason
+
+    return {
+        "jsonrpc": "2.0",
+        "id": frame.get("id"),
+        "error": {
+            "code": -32000,
+            "message": f"AIWatch denied routed MCP tools/call: {denial_label}.",
+            "data": data,
+        },
+    }
+
+
+def build_demo_blocked_mcp_attack_result(*, backend_url: str) -> dict[str, Any]:
+    if not _is_local_backend_url(backend_url):
+        raise CliStepError("MCP blocked attack demo only posts to a local AIWatch backend URL.")
+
+    frame = _build_demo_blocked_mcp_attack_frame()
+    events = normalize_tools_call_frame(
+        frame=frame,
+        server_id=DEMO_BLOCKED_MCP_ATTACK_SERVER_ID,
+        session_id=DEMO_BLOCKED_MCP_ATTACK_SESSION_ID,
+        agent_id="mcp-client-demo",
+    )
+    decision = evaluate_enforcement(events, enforcement_mode=ENFORCEMENT_MODE_DENY)
+    if not decision.should_deny or decision.rule_id != DENY_RULE_ID:
+        raise CliStepError("MCP blocked attack demo did not produce the expected R-MCP-005 denial.")
+
+    annotated_events = [
+        annotate_enforcement_decision(event, decision)
+        for event in events
+    ]
+
+    posted_event_ids: list[str] = []
+    alerts_created = 0
+    for event in annotated_events:
+        response_data = request_json(
+            "/v1/events",
+            backend_url=backend_url,
+            method="POST",
+            body=event.model_dump(mode="json"),
+        )
+        if not isinstance(response_data, dict):
+            raise CliStepError("MCP blocked attack demo failed: backend returned a non-object response.")
+        event_id = response_data.get("event_id") or event.event_id
+        posted_event_ids.append(str(event_id))
+        alerts_created += int(response_data.get("alerts_created", 0))
+
+    [event] = annotated_events
+    return {
+        "scenario": DEMO_BLOCKED_MCP_ATTACK_SESSION_ID,
+        "status": "blocked",
+        "action": decision.action,
+        "enforcement_mode": decision.enforcement_mode,
+        "rule_id": decision.rule_id,
+        "reason": "Credential-shaped routed MCP tool-call parameter denied before forwarding.",
+        "enforcement_reason": decision.reason,
+        "upstream_contacted": False,
+        "upstream": {
+            "contacted": False,
+            "note": "Safe local demo helper did not start or contact an upstream MCP server.",
+        },
+        "backend_url": backend_url,
+        "posted_event_ids": posted_event_ids,
+        "alerts_created": alerts_created,
+        "request": {
+            "method": frame["method"],
+            "server_id": DEMO_BLOCKED_MCP_ATTACK_SERVER_ID,
+            "tool_name": DEMO_BLOCKED_MCP_ATTACK_TOOL_NAME,
+            "arguments": event.action_params.get("arguments", {}),
+        },
+        "event": event.model_dump(mode="json"),
+        "mcp_response": _demo_mcp_denial_response(frame, decision),
+    }
+
+
+def handle_demo_blocked_mcp_attack(args: argparse.Namespace) -> int:
+    try:
+        result = build_demo_blocked_mcp_attack_result(backend_url=args.backend_url)
+    except urllib.error.HTTPError as error:
+        print(f"MCP blocked attack demo failed: HTTP {error.code}", file=sys.stderr)
+        return 1
+    except urllib.error.URLError:
+        print(BACKEND_DOWN_MESSAGE, file=sys.stderr)
+        return 1
+    except CliStepError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+
+    print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
 

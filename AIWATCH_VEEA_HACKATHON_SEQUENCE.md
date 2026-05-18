@@ -24,7 +24,7 @@ AIWatch does not currently claim:
 - file-edit monitoring
 - hidden reasoning visibility
 - arbitrary laptop/network monitoring
-- production-ready proxying
+- production-grade proxying
 - catching all secrets
 - blocking all exfiltration
 
@@ -141,7 +141,7 @@ cd C:\Users\pakso\Desktop\aiwatch
 git status
 git status --short
 git ls-files -m | Select-String -Pattern "aiwatch.db","aiwatch-eval.db","__pycache__",".pyc"
-Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","monitors Claude","monitors Cursor","watches your laptop","blocks all exfiltration","all secrets are caught","production-ready proxy"
+Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","provides broad Claude monitoring","provides broad Cursor monitoring","has device-wide laptop visibility","guarantees complete exfiltration blocking","every secret is detected","production-grade proxy"
 $oldCount = "11" + "3"
 Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "$oldCount passed","$oldCount tests","pytest: $oldCount","Backend tests.*$oldCount","proof points show ``$oldCount"
 ```
@@ -197,7 +197,7 @@ Validation commands:
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch
-Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","monitors Claude","monitors Cursor","watches your laptop","blocks all exfiltration","all secrets are caught","production-ready proxy"
+Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","provides broad Claude monitoring","provides broad Cursor monitoring","has device-wide laptop visibility","guarantees complete exfiltration blocking","every secret is detected","production-grade proxy"
 $oldCount = "11" + "3"
 Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "$oldCount passed","$oldCount tests","pytest: $oldCount","Backend tests.*$oldCount","proof points show ``$oldCount"
 ```
@@ -251,7 +251,7 @@ cd C:\Users\pakso\Desktop\aiwatch\frontend
 npm run build
 
 cd C:\Users\pakso\Desktop\aiwatch
-Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","monitors Claude","monitors Cursor","watches your laptop","blocks all exfiltration","all secrets are caught","production-ready proxy"
+Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,DEMO_RUNBOOK.md,AIWATCH_FINAL_DEMO_PACKET.md,AIWATCH_NEXT_PHASE_SPEC.md,AIWATCH_VEEA_HACKATHON_SEQUENCE.md,THREAT_MODEL.md,NON_GOALS.md,backend\README.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","provides broad Claude monitoring","provides broad Cursor monitoring","has device-wide laptop visibility","guarantees complete exfiltration blocking","every secret is detected","production-grade proxy"
 ```
 
 Commit recommendation:
@@ -410,16 +410,16 @@ Approved phrases:
 
 Forbidden current claims:
 
-- "AIWatch monitors Claude"
-- "AIWatch monitors Cursor"
-- "AIWatch watches prompts"
+- "AIWatch provides broad Claude monitoring"
+- "AIWatch provides broad Cursor monitoring"
+- "AIWatch has prompt visibility"
 - "AIWatch watches shell commands"
 - "AIWatch watches file edits"
 - "AIWatch sees hidden reasoning"
-- "AIWatch watches your laptop"
-- "AIWatch is a production-ready proxy"
+- "AIWatch has device-wide laptop visibility"
+- "AIWatch is a production-grade proxy"
 - "AIWatch catches all secrets"
-- "AIWatch blocks all exfiltration"
+- "AIWatch guarantees complete exfiltration blocking"
 
 These phrases may appear only as explicit negative examples, non-goals, caveats, or hard Q&A corrections.
 
@@ -438,7 +438,7 @@ HTTP relay Phase A is not:
 - GET stream handling
 - full Streamable HTTP
 - a generic HTTP proxy
-- production-ready proxying
+- production-grade proxying
 
 ## Decision Rule
 

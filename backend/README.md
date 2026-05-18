@@ -50,4 +50,4 @@ API polish expectations:
 
 The backend observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, stores MCP events and registry state locally, and raises deterministic MCP alerts. It does not provide generic Claude Code/Cursor monitoring, prompt visibility, shell-command monitoring, file-edit monitoring, hidden-reasoning visibility, or production enterprise gateway controls.
 
-HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.

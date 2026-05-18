@@ -16,7 +16,7 @@ AIWatch v1 is not:
 - a production enterprise gateway in its current state
 - full Streamable HTTP support, SSE support, or GET stream handling
 - a generic HTTP proxy
-- production-ready proxying
+- production-grade proxying
 - an ML detector
 - a tamper-evident HMAC logging system
 

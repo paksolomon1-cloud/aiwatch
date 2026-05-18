@@ -61,4 +61,4 @@ Examples that should not alert:
 
 ## Limitations
 
-This is deterministic pattern detection, not full secret validation. It does not call external APIs, does not verify whether a credential is active, does not guarantee all secrets are caught, and does not inspect non-MCP traffic.
+This is deterministic pattern detection, not full secret validation. It does not call external APIs, does not verify whether a credential is active, does not guarantee every secret is detected, and does not inspect non-MCP traffic.

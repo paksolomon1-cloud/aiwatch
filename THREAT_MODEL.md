@@ -21,7 +21,7 @@ MCP client -> AIWatch stdio wrapper/tap or local HTTP MCP relay -> MCP server
 
 AIWatch can observe MCP traffic only when the MCP client is configured to launch or route the MCP server through the AIWatch stdio wrapper/tap path or local HTTP MCP relay.
 
-The local HTTP MCP relay Phase A path is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+The local HTTP MCP relay Phase A path is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 Real ingestion paths use the canonical ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
 
@@ -64,6 +64,6 @@ The Lobster Trap interop path ingests local Lobster Trap JSONL audit records int
 - guaranteed prevention or blocking of all exfiltration
 - enforcement for traffic not routed through the AIWatch local MCP relay/wrapper
 - deny coverage beyond selected deterministic high-confidence MCP tool-call rules
-- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying
+- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-grade proxying
 - ML-based detection
 - SIEM or enterprise export workflows

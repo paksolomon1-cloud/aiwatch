@@ -158,7 +158,7 @@ Expected:
 - server ID: `fixture-http-notes-mcp`
 - alerts: `No alerts found.`
 
-Scope: this is a local-only, experimental, MCP-specific POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+Scope: this is a local-only, experimental, MCP-specific POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 Check opt-in routed MCP enforcement mode:
 
@@ -230,7 +230,7 @@ py -3.12 eval\run_eval.py
 - AIWatch does not guarantee prevention of all exfiltration.
 - Deny mode is opt-in and limited to selected routed MCP tool calls; current deny coverage starts with `R-MCP-005`.
 - Manual quarantine only affects future routed MCP calls through the local relay/wrapper when enforcement mode is enabled.
-- AIWatch does not implement production auth, HMAC logs, semantic embeddings, full Streamable HTTP, SSE, GET stream handling, a generic HTTP proxy, production-ready proxying, SIEM/exporters, ML detection, or Cursor runtime support.
+- AIWatch does not implement production auth, HMAC logs, semantic embeddings, full Streamable HTTP, SSE, GET stream handling, a generic HTTP proxy, production-grade proxying, SIEM/exporters, ML detection, or Cursor runtime support.
 - `aiwatch doctor` checks config shape only; it cannot prove a client loaded that config or prevent config tampering.
 
 ## Documentation

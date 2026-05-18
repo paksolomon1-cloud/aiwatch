@@ -81,7 +81,7 @@ Expected:
 - Tools show `echo_note` and `list_notes` on `fixture-http-notes-mcp`.
 - Alerts show `No alerts found.`
 
-Key message: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+Key message: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 ### Claude Code Live-Smoke Option
 
@@ -190,9 +190,9 @@ Key message:
 ## Claims Not To Make
 
 - Do not say "AIWatch secures Claude Code."
-- Do not say "AIWatch monitors Claude/Cursor."
-- Do not say "AIWatch watches your laptop."
-- Do not say "AIWatch blocks all exfiltration."
+- Do not say "AIWatch provides broad Claude or Cursor monitoring."
+- Do not say "AIWatch has device-wide laptop visibility."
+- Do not say "AIWatch guarantees complete exfiltration blocking."
 - Do not say "AIWatch observes prompts, shell commands, file edits, hidden reasoning, or Claude/Cursor internals."
 - Do not say "production-ready MCP proxy."
 - Do not say "Cursor runtime support is implemented."

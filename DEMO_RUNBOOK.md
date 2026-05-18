@@ -117,7 +117,27 @@ To run a local wrapper or relay in deny mode, set this before starting that wrap
 $env:AIWATCH_ENFORCEMENT_MODE="deny"
 ```
 
-### 7. Optional Live Lobster Trap Prompt-Layer Ingest
+### 7. Two Attack Examples
+
+MCP blocked attack:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-blocked-mcp-attack --backend-url http://127.0.0.1:7330
+```
+
+Expected result: JSON output shows `action=deny`, `enforcement_mode=deny`, `rule_id=R-MCP-005`, and `upstream_contacted=false`. In deny mode, AIWatch stops selected high-risk routed MCP calls before forwarding.
+
+Prompt-layer correlated attack:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+Expected result in `Unified Audit`: the bundled Lobster Trap `DENY` record with `correlation_id=demo-poisoned-mcp` groups with related AIWatch MCP activity and appears as elevated cross-layer risk. Lobster Trap provides the prompt/response decision; AIWatch ingests it locally and correlates it with routed MCP activity.
+
+### 8. Optional Live Lobster Trap Prompt-Layer Ingest
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
@@ -130,7 +150,7 @@ What to say:
 LLM traffic must be routed through Lobster Trap for live prompt/response audit records. AIWatch ingests the Lobster Trap JSONL audit log and correlates those records with routed MCP activity when correlation or session metadata lines up.
 ```
 
-### 8. Closing Statement
+### 9. Closing Statement
 
 ```text
 AIWatch provides a local trust layer for routed MCP agents: it observes tool traffic, detects risky MCP behavior, ingests Lobster Trap prompt/response audit records, correlates both layers in Unified Audit, and can optionally deny selected high-risk or quarantined routed tool calls before forwarding.
@@ -458,7 +478,7 @@ Expected:
 Say:
 
 ```text
-HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-ready proxying.
+HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-grade proxying.
 ```
 
 ## Hard Limitations
@@ -478,7 +498,7 @@ AIWatch also does not claim:
 
 - all-secret detection
 - all-exfiltration blocking
-- production-ready proxying
+- production-grade proxying
 - full Streamable HTTP support
 - SSE support
 - GET stream handling
@@ -516,7 +536,7 @@ No. Current AIWatch is observability, integrity checks, and deterministic alerti
 
 ### Is the HTTP relay production-ready?
 
-No. HTTP relay Phase A is a local-only experimental MCP POST JSON subset, not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-ready proxying.
+No. HTTP relay Phase A is a local-only experimental MCP POST JSON subset, not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-grade proxying.
 
 ### What should the judges remember?
 

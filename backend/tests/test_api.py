@@ -1002,6 +1002,57 @@ def test_demo_lobstertrap_fixture_ingests_successfully(monkeypatch, tmp_path: Pa
     clear_db()
 
 
+def test_unified_demo_seed_fixture_creates_elevated_cross_layer_group(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    _set_dev_mode(monkeypatch, enabled=True)
+    records = read_jsonl_objects(DEMO_LOBSTERTRAP_AUDIT_PATH)
+
+    with TestClient(app) as client:
+        seed_response = client.post("/v1/dev/seed-demo?clear=true&extended=true")
+        ingest_response = client.post("/v1/integrations/lobstertrap/audit", json={"records": records})
+        timeline_response = client.get("/v1/audit/timeline?limit=1000")
+
+    assert seed_response.status_code == 200
+    assert ingest_response.status_code == 200
+    assert timeline_response.status_code == 200
+
+    groups: dict[str, list[dict[str, object]]] = {}
+    for record in timeline_response.json():
+        key = (
+            record.get("correlation_id")
+            or record.get("trace_id")
+            or record.get("session_id")
+            or record.get("request_id")
+        )
+        if isinstance(key, str) and key:
+            groups.setdefault(key, []).append(record)
+
+    elevated_cross_layer_groups: dict[str, list[dict[str, object]]] = {}
+    for key, group_records in groups.items():
+        sources = {record.get("source") for record in group_records}
+        has_lobstertrap_risk = any(
+            record.get("source") == "lobstertrap"
+            and (
+                str(record.get("action") or "").upper() in {"DENY", "HUMAN_REVIEW"}
+                or str(record.get("decision") or "").lower() in {"block", "review"}
+            )
+            for record in group_records
+        )
+        if {"aiwatch", "lobstertrap"}.issubset(sources) and has_lobstertrap_risk:
+            elevated_cross_layer_groups[key] = group_records
+
+    assert "demo-poisoned-mcp" in elevated_cross_layer_groups
+    poisoned_group = elevated_cross_layer_groups["demo-poisoned-mcp"]
+    assert {record["source"] for record in poisoned_group}.issuperset({"aiwatch", "lobstertrap"})
+    assert any(record.get("action") == "DENY" for record in poisoned_group)
+    assert any(record.get("decision") == "block" for record in poisoned_group)
+
+    clear_db()
+
+
 def test_audit_summary_counts_aiwatch_lobstertrap_risk_and_redaction(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
     records = read_jsonl_objects(DEMO_LOBSTERTRAP_AUDIT_PATH)

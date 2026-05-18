@@ -110,6 +110,26 @@ py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:73
 $env:AIWATCH_ENFORCEMENT_MODE="deny"
 ```
 
+### Two attack examples
+
+MCP blocked attack:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-blocked-mcp-attack --backend-url http://127.0.0.1:7330
+```
+
+Expected result: JSON output shows `action=deny`, `enforcement_mode=deny`, `rule_id=R-MCP-005`, and `upstream_contacted=false`. In deny mode, AIWatch stops selected high-risk routed MCP calls before forwarding.
+
+Prompt-layer correlated attack:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+Expected result in `Unified Audit`: the bundled Lobster Trap `DENY` record with `correlation_id=demo-poisoned-mcp` groups with related AIWatch MCP activity and appears as elevated cross-layer risk. Lobster Trap provides the prompt/response decision; AIWatch ingests it locally and correlates it with routed MCP activity.
+
 ### Optional live Lobster Trap prompt-layer ingest
 
 ```powershell
@@ -286,7 +306,7 @@ Expected:
 - server ID: `fixture-http-notes-mcp`
 - alerts: `No alerts found.`
 
-Scope: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+Scope: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-grade proxying.
 
 ## 6. Architecture explanation
 
@@ -441,7 +461,7 @@ AIWatch only sees routed MCP traffic, the package smoke depends on Node/npm/npx,
 - no arbitrary laptop monitoring
 - no guaranteed all-secret detection
 - no universal production MCP proxy claim
-- no full Streamable HTTP, SSE, GET stream handling, generic HTTP proxy, or production-ready proxying claim
+- no full Streamable HTTP, SSE, GET stream handling, generic HTTP proxy, or production-grade proxying claim
 - real package smoke requires Node/npm/npx on PATH and may download the pinned package on first run
 - backend must already be running before seed and smoke commands
 - frontend `Trigger R-MCP-005 Demo` is synthetic

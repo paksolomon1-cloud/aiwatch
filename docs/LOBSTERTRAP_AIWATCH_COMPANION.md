@@ -521,4 +521,4 @@ Lobster Trap prompt/response audit records are being ingested into AIWatch's loc
 - AIWatch does not monitor shell commands, file edits, hidden reasoning, or the whole laptop.
 - AIWatch does not catch all secrets or block all exfiltration.
 - Lobster Trap is separate software unless a real bridge is implemented and verified.
-- AIWatch HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-ready proxying.
+- AIWatch HTTP relay Phase A is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not SSE, not GET stream handling, not full Streamable HTTP, not a generic HTTP proxy, and not production-grade proxying.

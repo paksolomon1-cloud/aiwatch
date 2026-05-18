@@ -79,7 +79,7 @@ The core product claim is:
 
 > AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
-Runtime smoke with Claude Code means Claude Code-routed MCP traffic can be observed when configured through the wrapper. It does not mean AIWatch monitors Claude Code generally.
+Runtime smoke with Claude Code means Claude Code-routed MCP traffic can be observed when configured through the wrapper. It does not mean AIWatch provides broad Claude Code monitoring.
 
 Future Cursor work must be framed the same way: Cursor-routed MCP traffic through the wrapper, not Cursor monitoring.
 
@@ -100,7 +100,7 @@ AIWatch does not currently claim:
 - generic Claude Code monitoring
 - generic Cursor monitoring
 - production-ready universal MCP proxying
-- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying
+- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-grade proxying
 - all-secret detection
 - all-exfiltration blocking
 - enterprise auth
@@ -114,12 +114,12 @@ AIWatch does not currently claim:
 Do not use these phrases as product claims:
 
 - "AIWatch secures Claude Code"
-- "AIWatch monitors Claude"
-- "AIWatch monitors Cursor"
-- "AIWatch watches your laptop"
-- "AIWatch blocks all exfiltration"
+- "AIWatch provides broad Claude monitoring"
+- "AIWatch provides broad Cursor monitoring"
+- "AIWatch has device-wide laptop visibility"
+- "AIWatch guarantees complete exfiltration blocking"
 - "AIWatch catches all secrets"
-- "production-ready proxy"
+- "production-grade proxy"
 
 These phrases may appear only as explicit negative examples or caveats.
 
@@ -506,7 +506,7 @@ Approved wording after success:
 
 Forbidden wording after success:
 
-- "AIWatch monitors Cursor."
+- "AIWatch provides broad Cursor monitoring."
 
 ## 10. Replay 404 Coupling Warning
 
@@ -604,7 +604,7 @@ Note:
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch
-Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,THREAT_MODEL.md,NON_GOALS.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","monitors Claude","monitors Cursor","watches your laptop","blocks all exfiltration","all secrets are caught","production-ready proxy"
+Select-String -Path README.md,QUICKSTART_DEMO.md,DEMO_SCRIPT.md,THREAT_MODEL.md,NON_GOALS.md,docs\*.md,frontend\src\*.tsx,frontend\src\*.ts -Pattern "secures Claude Code","provides broad Claude monitoring","provides broad Cursor monitoring","has device-wide laptop visibility","guarantees complete exfiltration blocking","every secret is detected","production-grade proxy"
 ```
 
 Any remaining matches must be explicit negative/non-goal wording.
