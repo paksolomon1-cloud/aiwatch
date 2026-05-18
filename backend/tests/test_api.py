@@ -32,6 +32,10 @@ def _set_dev_mode(monkeypatch, enabled: bool) -> None:
         monkeypatch.delenv("AIWATCH_DEV_MODE", raising=False)
 
 
+def _clear_replit_demo_events() -> None:
+    main_module._replit_recent_events.clear()
+
+
 def _parse_api_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
@@ -1277,3 +1281,89 @@ def test_dev_seed_demo_endpoint_creates_expected_demo_state(
         assert health_response.json()["alerts"] == 7
 
     clear_db()
+
+
+def test_replit_health_route_returns_service_json() -> None:
+    with TestClient(app) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "service": "aiwatch"}
+
+
+def test_replit_dashboard_route_serves_scoped_html() -> None:
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+    html = response.text
+    assert "<h1>AIWatch</h1>" in html
+    assert "AIWatch observes MCP traffic routed through the AIWatch wrapper or relay." in html
+    assert "Recent events" in html
+    assert "fetch('/api/events')" in html
+
+
+def test_replit_events_get_returns_event_list() -> None:
+    _clear_replit_demo_events()
+
+    with TestClient(app) as client:
+        response = client.get("/api/events")
+
+    assert response.status_code == 200
+    events = response.json()
+    assert isinstance(events, list)
+    assert events
+    assert all(isinstance(event, dict) for event in events)
+
+    _clear_replit_demo_events()
+
+
+def test_replit_events_post_persists_summary_for_subsequent_get() -> None:
+    _clear_replit_demo_events()
+    posted_event = {
+        "tool": "search_notes",
+        "server": "notes-mcp",
+        "risk": "medium",
+        "summary": "MCP tool drift observed through routed AIWatch demo traffic.",
+    }
+
+    with TestClient(app) as client:
+        post_response = client.post("/api/events", json=posted_event)
+        get_response = client.get("/api/events")
+
+    assert post_response.status_code == 200
+    post_payload = post_response.json()
+    assert post_payload["ok"] is True
+    assert post_payload["stored"] == 1
+    assert post_payload["event"]["tool"] == "search_notes"
+    assert post_payload["event"]["server"] == "notes-mcp"
+    assert post_payload["event"]["risk"] == "medium"
+    assert post_payload["event"]["summary"] == posted_event["summary"]
+    assert isinstance(post_payload["event"]["received_at"], str)
+
+    assert get_response.status_code == 200
+    events = get_response.json()
+    assert len(events) == 1
+    assert events[0]["tool"] == "search_notes"
+    assert events[0]["server"] == "notes-mcp"
+    assert events[0]["summary"] == posted_event["summary"]
+    assert "demo" not in events[0]
+
+    _clear_replit_demo_events()
+
+
+def test_replit_events_get_returns_labeled_demo_rows_when_empty() -> None:
+    _clear_replit_demo_events()
+
+    with TestClient(app) as client:
+        response = client.get("/api/events")
+
+    assert response.status_code == 200
+    events = response.json()
+    assert len(events) >= 1
+    assert all(event["demo"] is True for event in events)
+    assert all(str(event["summary"]).startswith("Sample:") for event in events)
+
+    _clear_replit_demo_events()

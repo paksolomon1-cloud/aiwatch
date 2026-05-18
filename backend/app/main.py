@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
 from app.credential_redaction import redact_json_like
@@ -48,6 +48,274 @@ LOBSTERTRAP_SUGGESTED_INGEST_COMMAND = (
 LOBSTERTRAP_DEMO_INGEST_COMMAND = (
     "py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330"
 )
+MAX_REPLIT_EVENTS = 50
+_replit_recent_events: list[dict[str, object]] = []
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _demo_replit_events() -> list[dict[str, object]]:
+    return [
+        {
+            "id": "demo-mcp-tool-drift",
+            "timestamp": _iso_now(),
+            "tool": "search_notes",
+            "server": "notes-mcp",
+            "risk": "medium",
+            "summary": "Sample: MCP tool fingerprint drift observed through routed AIWatch demo traffic.",
+            "demo": True,
+        },
+        {
+            "id": "demo-mcp-shadowed-tool",
+            "timestamp": _iso_now(),
+            "tool": "search_notes",
+            "server": "evil-notes-mcp",
+            "risk": "high",
+            "summary": "Sample: same MCP tool name appeared from another server in demo registry data.",
+            "demo": True,
+        },
+    ]
+
+
+def _replit_event_response() -> list[dict[str, object]]:
+    if not _replit_recent_events:
+        return _demo_replit_events()
+
+    return list(_replit_recent_events)
+
+
+def _dashboard_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIWatch Replit Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #071018;
+      color: #e8f4f8;
+    }
+    body {
+      margin: 0;
+      background: #071018;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 20px 56px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 6vw, 4rem);
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 32px;
+      font-size: 1.25rem;
+    }
+    p {
+      color: #a9bac4;
+      line-height: 1.6;
+    }
+    .scope {
+      margin: 22px 0;
+      padding: 16px;
+      border: 1px solid #2f5364;
+      border-radius: 8px;
+      background: #0d1d29;
+      color: #d9f6ff;
+      font-weight: 700;
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .card {
+      border: 1px solid #1f3340;
+      border-radius: 8px;
+      background: #0b1720;
+      padding: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid #1f3340;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #1f3340;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: #a9bac4;
+      background: #0d1d29;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    code {
+      color: #d9f6ff;
+      overflow-wrap: anywhere;
+    }
+    .risk {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #193348;
+      color: #d9f6ff;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .sample {
+      color: #8fddff;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    @media (max-width: 720px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+      thead {
+        display: none;
+      }
+      tr {
+        border-bottom: 1px solid #1f3340;
+      }
+      td {
+        border-bottom: 0;
+      }
+      td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 4px;
+        color: #a9bac4;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>AIWatch</h1>
+    <p>Hosted hackathon demo dashboard for MCP tool-layer observability.</p>
+    <div class="scope">AIWatch observes MCP traffic routed through the AIWatch wrapper or relay.</div>
+
+    <section class="grid" aria-label="Demo notes">
+      <div class="card">
+        <h2>How the demo works</h2>
+        <p>This Replit app accepts summarized AIWatch events at <code>POST /api/events</code>, keeps recent events in memory, and shows them below. If no real event summaries have arrived, sample rows are shown and labeled as demo data.</p>
+      </div>
+      <div class="card">
+        <h2>Reproduce locally</h2>
+        <p>Run the full local AIWatch backend and dashboard from GitHub to observe real MCP traffic routed through the stdio wrapper or local HTTP MCP relay. This hosted page is a judge-friendly summary view, not broad system monitoring.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Recent events</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Tool</th>
+            <th>Server</th>
+            <th>Risk</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody id="events-body">
+          <tr><td colspan="5">Loading events...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    function text(value, fallback) {
+      return value === undefined || value === null || value === '' ? fallback : String(value)
+    }
+
+    function eventTool(event) {
+      return event.tool || event.tool_name || event.name || 'n/a'
+    }
+
+    function eventServer(event) {
+      return event.server || event.server_id || event.mcp_server || 'n/a'
+    }
+
+    function eventRisk(event) {
+      return event.risk || event.risk_label || event.severity || 'n/a'
+    }
+
+    function eventSummary(event) {
+      return event.summary || event.description || event.message || event.event_type || 'Received event summary'
+    }
+
+    function cell(label, value) {
+      const item = document.createElement('td')
+      item.dataset.label = label
+      item.textContent = text(value, 'n/a')
+      return item
+    }
+
+    async function loadEvents() {
+      const body = document.getElementById('events-body')
+      try {
+        const response = await fetch('/api/events')
+        const events = await response.json()
+        body.innerHTML = ''
+        for (const event of events) {
+          const row = document.createElement('tr')
+          const timestampCell = cell('Timestamp', event.timestamp || event.received_at)
+          if (event.demo) {
+            const sample = document.createElement('div')
+            sample.className = 'sample'
+            sample.textContent = 'demo/sample'
+            timestampCell.appendChild(sample)
+          }
+          const riskCell = document.createElement('td')
+          riskCell.dataset.label = 'Risk'
+          const risk = document.createElement('span')
+          risk.className = 'risk'
+          risk.textContent = text(eventRisk(event), 'n/a')
+          riskCell.appendChild(risk)
+          row.appendChild(timestampCell)
+          row.appendChild(cell('Tool', eventTool(event)))
+          row.appendChild(cell('Server', eventServer(event)))
+          row.appendChild(riskCell)
+          row.appendChild(cell('Summary', eventSummary(event)))
+          body.appendChild(row)
+        }
+      } catch (error) {
+        body.textContent = ''
+        const row = document.createElement('tr')
+        const item = document.createElement('td')
+        item.colSpan = 5
+        item.textContent = 'Unable to load events.'
+        row.appendChild(item)
+        body.appendChild(row)
+      }
+    }
+
+    void loadEvents()
+    window.setInterval(loadEvents, 5000)
+  </script>
+</body>
+</html>"""
 
 
 @asynccontextmanager
@@ -384,13 +652,33 @@ def _tool_quarantine_response(
     }
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    return {
-        "name": "AIWatch",
-        "status": "running",
-        "message": "AIWatch observes MCP traffic routed through the AIWatch wrapper.",
-    }
+@app.get("/", response_class=HTMLResponse)
+def root() -> HTMLResponse:
+    return HTMLResponse(_dashboard_html())
+
+
+@app.get("/health")
+def replit_health() -> dict[str, bool | str]:
+    return {"ok": True, "service": "aiwatch"}
+
+
+@app.get("/api/events")
+def read_replit_events() -> list[dict[str, object]]:
+    return _replit_event_response()
+
+
+@app.post("/api/events")
+async def create_replit_event(request: Request) -> dict[str, object]:
+    payload = _parse_json_payload(await _read_event_request_body(request))
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    event = dict(payload)
+    event.setdefault("received_at", _iso_now())
+    _replit_recent_events.insert(0, event)
+    del _replit_recent_events[MAX_REPLIT_EVENTS:]
+
+    return {"ok": True, "stored": 1, "event": event}
 
 
 @app.post("/v1/events")

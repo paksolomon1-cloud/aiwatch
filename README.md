@@ -204,6 +204,36 @@ Open `http://localhost:5173/`.
 
 Lobster Trap prompt/response audit records are ingested into AIWatch's local unified audit timeline. LLM/prompt traffic must be routed through Lobster Trap for live prompt/response audit records to appear. MCP traffic must be routed through the AIWatch wrapper/relay for MCP-layer observation and opt-in enforcement. AIWatch correlates ingested Lobster Trap records and routed MCP records when correlation or session metadata lines up.
 
+## Replit Hosted Demo
+
+AIWatch can run as a single Replit-hosted judge demo app. The hosted app serves a minimal dashboard, accepts JSON event summaries at `POST /api/events`, keeps recent events in memory, and shows sample rows when no real event summaries have been received.
+
+The hosted demo keeps the same scope boundary: AIWatch observes MCP traffic routed through the AIWatch wrapper or relay. It does not monitor prompts, Claude/Cursor globally, shell commands, file edits, hidden reasoning, the laptop, or arbitrary network traffic.
+
+Local run equivalent:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:PORT="3000"
+py -3.12 -m uvicorn app.main:app --host 0.0.0.0 --port $env:PORT
+```
+
+Replit run command:
+
+```bash
+pip install -r backend/requirements.txt && cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000}
+```
+
+Smoke test the hosted demo API:
+
+```bash
+curl "$REPLIT_URL/health"
+curl -X POST "$REPLIT_URL/api/events" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"search_notes","server":"notes-mcp","risk":"medium","summary":"MCP tool drift observed through routed AIWatch demo traffic."}'
+curl "$REPLIT_URL/api/events"
+```
+
 Run the config health check from the repo root:
 
 ```powershell
