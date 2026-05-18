@@ -20,6 +20,12 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from app.enforcement import (
+    ENFORCEMENT_MODE_OBSERVE,
+    annotate_enforcement_decision,
+    evaluate_enforcement,
+    resolve_enforcement_mode,
+)
 from app.mcp_frame_observer import DEFAULT_MAX_PENDING_REQUEST_METHODS, McpFrameObserver
 from app.schemas import AgentEvent
 
@@ -59,6 +65,7 @@ class RelayConfig:
     max_response_forward_bytes: int = MAX_UPSTREAM_RESPONSE_FORWARD_BYTES
     upstream_timeout_seconds: float = UPSTREAM_TIMEOUT_SECONDS
     backend_post_timeout_seconds: float = BACKEND_POST_TIMEOUT_SECONDS
+    enforcement_mode: str = ENFORCEMENT_MODE_OBSERVE
 
 
 @dataclass(frozen=True)
@@ -133,6 +140,22 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
 
         observed_client = self.server.observer.observe_client_frame(client_frame)
         client_events = observed_client.events
+        enforcement_decision = evaluate_enforcement(
+            client_events,
+            enforcement_mode=config.enforcement_mode,
+        )
+        if enforcement_decision.should_deny:
+            client_events = [
+                annotate_enforcement_decision(event, enforcement_decision)
+                for event in client_events
+            ]
+            _post_observed_events(self.server, client_events)
+            self._send_mcp_denial_response(client_frame, enforcement_decision)
+            _stderr(
+                self.server,
+                f"[aiwatch-http-relay] denied tools/call rule={enforcement_decision.rule_id}",
+            )
+            return
 
         try:
             upstream_response = _forward_to_upstream(
@@ -166,6 +189,29 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
     def _send_error_response(self, status: int, detail: str) -> None:
         payload = json.dumps({"detail": detail}).encode("utf-8")
         self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _send_mcp_denial_response(self, frame: dict[str, Any], decision: Any) -> None:
+        payload = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": frame.get("id"),
+                "error": {
+                    "code": -32000,
+                    "message": f"AIWatch denied routed MCP tools/call: {decision.rule_id}.",
+                    "data": {
+                        "enforcement_mode": decision.enforcement_mode,
+                        "rule_id": decision.rule_id,
+                        "reason": decision.reason,
+                    },
+                },
+            }
+        ).encode("utf-8")
+        self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
@@ -213,12 +259,14 @@ def build_relay_server(
     max_response_forward_bytes: int = MAX_UPSTREAM_RESPONSE_FORWARD_BYTES,
     upstream_timeout_seconds: float = UPSTREAM_TIMEOUT_SECONDS,
     backend_post_timeout_seconds: float = BACKEND_POST_TIMEOUT_SECONDS,
+    enforcement_mode: str | None = None,
 ) -> AiWatchHttpMcpRelayServer:
     if listen_host not in {"127.0.0.1", "localhost", "::1"} and not _is_loopback_ip(listen_host):
         raise ValueError("listen host must be localhost or loopback")
     normalized_path = _normalize_relay_path(relay_path)
     normalized_upstream = validate_upstream_url(upstream_url)
     resolved_session_id = session_id or _generate_session_id(server_id)
+    resolved_enforcement_mode = resolve_enforcement_mode(enforcement_mode)
     config = RelayConfig(
         relay_path=normalized_path,
         upstream_url=normalized_upstream,
@@ -231,6 +279,7 @@ def build_relay_server(
         max_response_forward_bytes=max_response_forward_bytes,
         upstream_timeout_seconds=upstream_timeout_seconds,
         backend_post_timeout_seconds=backend_post_timeout_seconds,
+        enforcement_mode=resolved_enforcement_mode,
     )
     return AiWatchHttpMcpRelayServer((listen_host, listen_port), config, stderr=stderr)
 
@@ -245,6 +294,7 @@ def serve_relay(
     server_id: str,
     session_id: str | None,
     agent_id: str = DEFAULT_AGENT_ID,
+    enforcement_mode: str | None = None,
 ) -> None:
     server = build_relay_server(
         listen_host=listen_host,
@@ -255,6 +305,7 @@ def serve_relay(
         server_id=server_id,
         session_id=session_id,
         agent_id=agent_id,
+        enforcement_mode=enforcement_mode,
     )
     _stderr(
         server,
@@ -480,6 +531,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--server-id", required=True)
     parser.add_argument("--session-id")
     parser.add_argument("--agent-id", default=DEFAULT_AGENT_ID)
+    parser.add_argument(
+        "--enforcement-mode",
+        choices=["observe", "deny"],
+        help="Override AIWATCH_ENFORCEMENT_MODE for this relay process.",
+    )
     return parser
 
 
@@ -495,6 +551,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             server_id=args.server_id,
             session_id=args.session_id,
             agent_id=args.agent_id,
+            enforcement_mode=args.enforcement_mode,
         )
     except ValueError as error:
         print(f"[aiwatch-http-relay] configuration error: {error}", file=sys.stderr)

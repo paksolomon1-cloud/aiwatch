@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from app.enforcement import ENFORCEMENT_ENV_VAR, resolve_enforcement_mode
 from app.storage import clear_db, init_db, list_alerts as list_local_alerts, list_events as list_local_events
 from app.veea_audit import (
     build_unified_veea_audit_timeline,
@@ -408,6 +409,13 @@ def build_parser() -> argparse.ArgumentParser:
     lobstertrap_status_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     lobstertrap_status_parser.set_defaults(handler=handle_lobstertrap_status)
 
+    enforcement_status_parser = subparsers.add_parser(
+        "enforcement-status",
+        help="Show the local AIWatch routed MCP enforcement mode.",
+    )
+    enforcement_status_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    enforcement_status_parser.set_defaults(handler=handle_enforcement_status)
+
     return parser
 
 
@@ -783,6 +791,20 @@ def handle_lobstertrap_status(args: argparse.Namespace) -> int:
         return 1
 
     print(json.dumps(status, indent=2, sort_keys=True))
+    return 0
+
+
+def handle_enforcement_status(args: argparse.Namespace) -> int:
+    try:
+        mode = resolve_enforcement_mode()
+    except ValueError as error:
+        print(f"Invalid enforcement configuration: {error}", file=sys.stderr)
+        return 2
+
+    print(f"AIWatch enforcement mode: {mode}")
+    print(f"Config: {ENFORCEMENT_ENV_VAR}=observe|deny")
+    print("Scope: local MCP relay/wrapper traffic only.")
+    print(f"Backend URL: {args.backend_url}")
     return 0
 
 

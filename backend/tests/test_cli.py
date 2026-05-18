@@ -14,6 +14,7 @@ from app.cli import (
     handle_demo_seed,
     inspect_mcp_config_file,
     inspect_mcp_configs,
+    main as cli_main,
 )
 
 
@@ -47,6 +48,7 @@ def test_parser_recognizes_other_commands() -> None:
     assert parser.parse_args(["doctor", "--json"]).json is True
     assert parser.parse_args(["tools"]).command == "tools"
     assert parser.parse_args(["alerts"]).command == "alerts"
+    assert parser.parse_args(["enforcement-status"]).command == "enforcement-status"
     assert parser.parse_args(["export-veea-audit"]).command == "export-veea-audit"
     assert parser.parse_args(["export-veea-audit", "--out", "audit.jsonl"]).out == Path("audit.jsonl")
     assert parser.parse_args(["export-veea-audit", "--timeline"]).timeline is True
@@ -63,6 +65,7 @@ def test_help_text_lists_supported_commands() -> None:
     assert "doctor" in help_text
     assert "tools" in help_text
     assert "alerts" in help_text
+    assert "enforcement-status" in help_text
     assert "export-veea-audit" in help_text
 
 
@@ -374,3 +377,50 @@ def test_demo_seed_reports_disabled_dev_endpoints(monkeypatch, capsys) -> None:
 
     assert result == 1
     assert "AIWatch dev endpoints are disabled." in output
+
+
+def test_enforcement_status_defaults_to_observe(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("AIWATCH_ENFORCEMENT_MODE", raising=False)
+
+    assert cli_main(["enforcement-status", "--backend-url", "http://127.0.0.1:7330"]) == 0
+
+    output = capsys.readouterr().out
+    assert "AIWatch enforcement mode: observe" in output
+    assert "AIWATCH_ENFORCEMENT_MODE=observe|deny" in output
+    assert "local MCP relay/wrapper traffic only" in output
+
+
+def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
+    root_dir = Path(__file__).resolve().parents[2]
+    docs = [
+        root_dir / "README.md",
+        root_dir / "THREAT_MODEL.md",
+        root_dir / "NON_GOALS.md",
+        root_dir / "DEMO_RUNBOOK.md",
+    ]
+    enforcement_lines = "\n".join(
+        line
+        for path in docs
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "enforcement" in line.lower() or "deny mode" in line.lower() or "R-MCP-005" in line
+    )
+    forbidden_phrases = [
+        "live Veea platform integration",
+        "TerraFabric API",
+        "TerraFabric SDK",
+        "deployed Veea infrastructure",
+        "actual TerraFabric control plane",
+        "AIWatch monitors prompts",
+        "AIWatch watches prompts",
+        "Lobster Trap monitors MCP",
+        "monitors Claude",
+        "monitors Cursor",
+        "watches your laptop",
+        "blocks all exfiltration",
+        "all secrets are caught",
+        "production-ready proxy",
+        "production shared dashboard",
+    ]
+
+    for phrase in forbidden_phrases:
+        assert phrase not in enforcement_lines

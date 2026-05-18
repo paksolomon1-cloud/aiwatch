@@ -154,6 +154,7 @@ def _relay_server(
     max_request_body_bytes: int = relay_module.MAX_RELAY_REQUEST_BODY_BYTES,
     max_response_body_bytes: int = relay_module.MAX_UPSTREAM_RESPONSE_BODY_BYTES,
     max_response_forward_bytes: int = relay_module.MAX_UPSTREAM_RESPONSE_FORWARD_BYTES,
+    enforcement_mode: str | None = None,
 ) -> Iterator[tuple[str, io.StringIO]]:
     stderr_buffer = stderr or io.StringIO()
     server = relay_module.build_relay_server(
@@ -170,6 +171,7 @@ def _relay_server(
         max_response_forward_bytes=max_response_forward_bytes,
         upstream_timeout_seconds=2,
         backend_post_timeout_seconds=0.2,
+        enforcement_mode=enforcement_mode,
     )
     with _running_server(server):
         yield f"http://127.0.0.1:{server.server_port}/mcp", stderr_buffer
@@ -380,6 +382,128 @@ def test_tools_call_post_creates_normalized_event_sent_to_backend_events_route()
     assert event["action_params"]["tool_name"] == "list_notes"
     assert event["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
     assert raw_secret not in json.dumps(event)
+
+
+def test_default_enforcement_mode_observes_and_forwards_r_mcp_005(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("AIWATCH_ENFORCEMENT_MODE", raising=False)
+    raw_secret = "sk-1234567890abcdefABCDEF1234567890"
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(upstream_url=upstream_url, backend_url=backend_url) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"api_key": raw_secret}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    assert status == 200
+    assert json.loads(body)["result"]["isError"] is False
+    assert len(upstream_calls) == 1
+    assert "enforcement" not in backend_events[0]["action_params"]
+
+
+def test_deny_mode_blocks_r_mcp_005_before_upstream_forwarding() -> None:
+    raw_secret = "sk-1234567890abcdefABCDEF1234567890"
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(
+                upstream_url=upstream_url,
+                backend_url=backend_url,
+                enforcement_mode="deny",
+            ) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"api_key": raw_secret}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    response = json.loads(body)
+    event = backend_events[0]
+    assert status == 200
+    assert response["error"]["code"] == -32000
+    assert response["error"]["data"]["enforcement_mode"] == "deny"
+    assert response["error"]["data"]["rule_id"] == "R-MCP-005"
+    assert upstream_calls == []
+    assert event["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
+    assert event["action_params"]["enforcement"] == {
+        "action": "deny",
+        "enforcement_mode": "deny",
+        "rule_id": "R-MCP-005",
+        "reason": "Credential-shaped value in MCP tools/call parameters",
+    }
+    assert raw_secret not in json.dumps(event)
+
+
+def test_observe_mode_does_not_block_r_mcp_005() -> None:
+    raw_secret = "sk-1234567890abcdefABCDEF1234567890"
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(
+                upstream_url=upstream_url,
+                backend_url=backend_url,
+                enforcement_mode="observe",
+            ) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"api_key": raw_secret}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    assert status == 200
+    assert json.loads(body)["result"]["isError"] is False
+    assert len(upstream_calls) == 1
+    assert backend_events[0]["action_type"] == "tool_call"
+    assert "credential_findings" in backend_events[0]["action_params"]
+
+
+def test_deny_mode_allows_safe_tools_call() -> None:
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(
+                upstream_url=upstream_url,
+                backend_url=backend_url,
+                enforcement_mode="deny",
+            ) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"query": "release notes"}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    assert status == 200
+    assert json.loads(body)["result"]["isError"] is False
+    assert len(upstream_calls) == 1
+    assert "enforcement" not in backend_events[0]["action_params"]
 
 
 def test_tools_list_request_and_json_response_create_tool_register_events() -> None:

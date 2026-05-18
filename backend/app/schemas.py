@@ -86,6 +86,10 @@ class AlertEvidence(BaseModel):
     other_server_ids: list[str] = Field(default_factory=list)
     matching_fingerprint_ids: list[str] = Field(default_factory=list)
     credential_findings: list[dict[str, Any]] = Field(default_factory=list)
+    enforcement_action: str | None = None
+    enforcement_mode: str | None = None
+    enforcement_rule_id: str | None = None
+    enforcement_reason: str | None = None
 
 
 class Alert(BaseModel):

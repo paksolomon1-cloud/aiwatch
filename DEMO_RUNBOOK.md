@@ -196,6 +196,21 @@ Expected:
 - false positives: none
 - false negatives: none
 
+### Optional Enforcement Status
+
+Use this only to show configuration state. Deny mode is opt-in and applies only to local MCP relay/wrapper traffic routed through AIWatch.
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:7330
+```
+
+Safe wording:
+
+```text
+AIWatch can optionally deny selected routed MCP tool calls when deterministic high-confidence rules match. The current deny MVP starts with R-MCP-005 and requires AIWATCH_ENFORCEMENT_MODE=deny on the local relay or wrapper process.
+```
+
 ### Stdio Fixture Smoke
 
 ```powershell

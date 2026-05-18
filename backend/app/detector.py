@@ -225,6 +225,9 @@ def detect_alerts(event: AgentEvent) -> list[Alert]:
             if not isinstance(tool_name, str) and isinstance(params, dict):
                 tool_name = params.get("name")
             server_id = event.action_params.get("server_id")
+            enforcement = event.action_params.get("enforcement")
+            if not isinstance(enforcement, dict):
+                enforcement = {}
             alerts.append(
                 Alert(
                     severity=Severity.CRITICAL,
@@ -245,6 +248,20 @@ def detect_alerts(event: AgentEvent) -> list[Alert]:
                         tool_name=tool_name if isinstance(tool_name, str) else None,
                         server_id=server_id if isinstance(server_id, str) else None,
                         credential_findings=findings,
+                        enforcement_action=(
+                            str(enforcement["action"]) if isinstance(enforcement.get("action"), str) else None
+                        ),
+                        enforcement_mode=(
+                            str(enforcement["enforcement_mode"])
+                            if isinstance(enforcement.get("enforcement_mode"), str)
+                            else None
+                        ),
+                        enforcement_rule_id=(
+                            str(enforcement["rule_id"]) if isinstance(enforcement.get("rule_id"), str) else None
+                        ),
+                        enforcement_reason=(
+                            str(enforcement["reason"]) if isinstance(enforcement.get("reason"), str) else None
+                        ),
                     ),
                     decision="block",
                 )

@@ -136,6 +136,32 @@ def test_openai_like_key_in_tool_call_arguments_triggers_redacted_alert() -> Non
     assert raw_secret not in evidence_text
 
 
+def test_r_mcp_005_alert_preserves_enforcement_metadata() -> None:
+    raw_secret = "sk-proj-1234567890abcdefABCDEF1234567890"
+    event = _mcp_tool_call_event({"api_key": raw_secret})
+    event = event.model_copy(
+        update={
+            "action_params": {
+                **event.action_params,
+                "enforcement": {
+                    "action": "deny",
+                    "enforcement_mode": "deny",
+                    "rule_id": "R-MCP-005",
+                    "reason": "Credential-shaped value in MCP tools/call parameters",
+                },
+            }
+        }
+    )
+
+    alerts = detect_alerts(event)
+
+    assert [alert.rule_id for alert in alerts] == ["R-MCP-005"]
+    assert alerts[0].evidence.enforcement_action == "deny"
+    assert alerts[0].evidence.enforcement_mode == "deny"
+    assert alerts[0].evidence.enforcement_rule_id == "R-MCP-005"
+    assert alerts[0].evidence.enforcement_reason == "Credential-shaped value in MCP tools/call parameters"
+
+
 def test_github_like_token_triggers_credential_alert() -> None:
     raw_secret = "ghp_1234567890abcdefABCDEF1234567890abcdef"
     alerts = detect_alerts(_mcp_tool_call_event({"access_token": raw_secret}))

@@ -20,6 +20,11 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.frame_log import DEFAULT_FRAME_LOG_PATH, append_frame_log, build_frame_log_entry
 from app.credential_redaction import redact_json_like
+from app.enforcement import (
+    annotate_enforcement_decision,
+    evaluate_enforcement,
+    resolve_enforcement_mode,
+)
 from app.mcp_frame_observer import DEFAULT_MAX_PENDING_REQUEST_METHODS, McpFrameObserver
 from app.schemas import AgentEvent
 
@@ -186,6 +191,24 @@ def _post_observed_events(*, backend_url: str, events: Sequence[AgentEvent]) -> 
     return (len(events), total_alerts)
 
 
+def _mcp_denial_response(frame: dict[str, Any], decision: Any) -> str:
+    return json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": frame.get("id"),
+            "error": {
+                "code": -32000,
+                "message": f"AIWatch denied routed MCP tools/call: {decision.rule_id}.",
+                "data": {
+                    "enforcement_mode": decision.enforcement_mode,
+                    "rule_id": decision.rule_id,
+                    "reason": decision.reason,
+                },
+            },
+        }
+    )
+
+
 def run_tap(
     *,
     server_argv: Sequence[str],
@@ -195,10 +218,12 @@ def run_tap(
     backend_url: str,
     log_path: Path,
     log_raw_frames: bool,
+    enforcement_mode: str | None = None,
 ) -> int:
     resolved_session_id = session_id if session_id is not None else _generate_session_id(server_id)
     if session_id is None:
         _stderr(f"[aiwatch] generated session_id={resolved_session_id}")
+    resolved_enforcement_mode = resolve_enforcement_mode(enforcement_mode)
 
     observer = McpFrameObserver(
         server_id=server_id,
@@ -322,6 +347,28 @@ def run_tap(
                     ),
                 )
 
+            enforcement_decision = evaluate_enforcement(
+                observed_client_events,
+                enforcement_mode=resolved_enforcement_mode,
+            )
+            if enforcement_decision.should_deny:
+                observed_client_events = [
+                    annotate_enforcement_decision(event, enforcement_decision)
+                    for event in observed_client_events
+                ]
+                denial_line = _mcp_denial_response(parsed_client, enforcement_decision)
+                sys.stdout.write(denial_line)
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                try:
+                    _post_observed_events(backend_url=backend_url, events=observed_client_events)
+                except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                    if not backend_unavailable_logged:
+                        _stderr("[aiwatch] backend unavailable; denied frame not recorded")
+                        backend_unavailable_logged = True
+                _stderr(f"[aiwatch] denied tools/call rule={enforcement_decision.rule_id}")
+                continue
+
             _write_upstream_line(upstream.stdin, f"{client_line}\n")
             upstream.stdin.flush()
 
@@ -368,6 +415,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write raw JSON-RPC frames to a local JSONL file for demo/debug use.",
     )
     parser.add_argument(
+        "--enforcement-mode",
+        choices=["observe", "deny"],
+        help="Override AIWATCH_ENFORCEMENT_MODE for this wrapper process.",
+    )
+    parser.add_argument(
         "server_argv",
         nargs="+",
         help="Upstream MCP-like server argv. Use -- before the server command.",
@@ -397,6 +449,7 @@ def main() -> int:
         backend_url=args.backend_url,
         log_path=Path(args.log_path),
         log_raw_frames=args.log_raw_frames,
+        enforcement_mode=args.enforcement_mode,
     )
 
 

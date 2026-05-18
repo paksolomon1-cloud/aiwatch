@@ -92,6 +92,7 @@ def _run_tap_with_scripted_server(
     server_id: str = "fake-notes-mcp",
     session_id: str | None = "stdio-demo-001",
     log_raw_frames: bool = False,
+    enforcement_mode: str | None = None,
 ) -> tuple[int, str, str, dict[str, object]]:
     captured: dict[str, object] = {}
 
@@ -126,6 +127,7 @@ def _run_tap_with_scripted_server(
         backend_url="http://127.0.0.1:7330",
         log_path=tmp_path / "frames.jsonl",
         log_raw_frames=log_raw_frames,
+        enforcement_mode=enforcement_mode,
     )
     return result, stdout_buffer.getvalue(), stderr_buffer.getvalue(), captured
 
@@ -442,6 +444,48 @@ def test_tools_call_raw_frame_log_redacts_credential_values(monkeypatch, tmp_pat
     log_text = (tmp_path / "frames.jsonl").read_text(encoding="utf-8")
     assert raw_secret not in log_text
     assert "[REDACTED:GITHUB_TOKEN]" in log_text
+
+
+def test_stdio_deny_mode_blocks_r_mcp_005_without_writing_upstream(monkeypatch, tmp_path: Path) -> None:
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 1}
+
+    raw_secret = "sk-1234567890abcdefABCDEF1234567890"
+    client_line = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "export_notes", "arguments": {"api_key": raw_secret}},
+        }
+    )
+
+    result, stdout_text, stderr_text, captured = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=[client_line],
+        server_batches=[[]],
+        post_event=fake_post_event,
+        enforcement_mode="deny",
+    )
+
+    upstream_stdin = captured["stdin"]
+    response = json.loads(stdout_text)
+    assert result == 0
+    assert isinstance(upstream_stdin, _RecordingStdin)
+    assert upstream_stdin.writes == []
+    assert response["error"]["code"] == -32000
+    assert response["error"]["data"]["enforcement_mode"] == "deny"
+    assert response["error"]["data"]["rule_id"] == "R-MCP-005"
+    assert posted_events[0]["action_params"]["enforcement"]["action"] == "deny"
+    assert posted_events[0]["action_params"]["enforcement"]["rule_id"] == "R-MCP-005"
+    assert raw_secret not in json.dumps(posted_events)
+    assert raw_secret not in stdout_text
+    assert raw_secret not in stderr_text
+    assert "[aiwatch] denied tools/call rule=R-MCP-005" in stderr_text
 
 
 def test_server_to_client_raw_frame_log_redacts_echoed_credential_values(monkeypatch, tmp_path: Path) -> None:

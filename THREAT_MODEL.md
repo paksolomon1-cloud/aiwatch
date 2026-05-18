@@ -25,6 +25,8 @@ The local HTTP MCP relay Phase A path is local-only, experimental, MCP-specific,
 
 Real ingestion paths use the canonical ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
 
+Optional enforcement is off by default. When `AIWATCH_ENFORCEMENT_MODE=deny` is set for the local MCP relay/wrapper process, AIWatch can deny selected routed MCP `tools/call` requests before forwarding. The MVP deny scope is limited to deterministic high-confidence `R-MCP-005` credential-shaped tool-call parameters.
+
 The Lobster Trap interop path ingests local Lobster Trap JSONL audit records into AIWatch's local audit store after normalization and redaction. It is a local audit timeline bridge, not prompt inspection by AIWatch and not MCP inspection by Lobster Trap.
 
 ## Assumptions
@@ -42,6 +44,7 @@ The Lobster Trap interop path ingests local Lobster Trap JSONL audit records int
 - `R-MCP-002`: fingerprint drift or tool-definition rug-pull
 - `R-MCP-004`: MCP tool name shadowing across servers
 - `R-MCP-005`: credential-shaped values in MCP `tools/call` parameters
+- opt-in deny mode for selected routed MCP tool calls matching deterministic high-confidence rules, currently `R-MCP-005`
 - likely unwrapped MCP servers bypassing AIWatch, detectable by `aiwatch doctor` config checks
 
 ## Not Covered
@@ -59,6 +62,8 @@ The Lobster Trap interop path ingests local Lobster Trap JSONL audit records int
 - Lobster Trap audit records that are not posted to the local AIWatch ingestion endpoint or read by the CLI ingestion command
 - production auth or multi-tenant security
 - guaranteed prevention or blocking of all exfiltration
+- enforcement for traffic not routed through the AIWatch local MCP relay/wrapper
+- deny coverage beyond selected deterministic high-confidence MCP tool-call rules
 - full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying
 - ML-based detection
 - SIEM or enterprise export workflows

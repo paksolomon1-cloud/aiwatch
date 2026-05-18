@@ -23,6 +23,25 @@ Future Veea directions may include additional adapters beyond MCP, richer policy
 
 The repo still contains legacy/demo coding-agent rules for seeded demos and eval fixtures, but the product center is MCP observability and integrity.
 
+## Optional Enforcement
+
+AIWatch can optionally deny selected routed MCP tool calls when they match deterministic high-confidence rules, but only when traffic is routed through the AIWatch local MCP relay/wrapper and enforcement mode is explicitly enabled.
+
+Configuration:
+
+```powershell
+$env:AIWATCH_ENFORCEMENT_MODE="observe" # default
+$env:AIWATCH_ENFORCEMENT_MODE="deny"    # opt-in deny mode
+```
+
+The MVP deny rule is limited to `R-MCP-005` for credential-shaped MCP `tools/call` parameters. In `observe` mode, AIWatch preserves the existing behavior: routed events are observed, redacted, stored, and alerted without blocking the upstream MCP call. In `deny` mode, matching `R-MCP-005` routed tool calls are not forwarded to the upstream MCP server; AIWatch returns an MCP-compatible JSON-RPC error and records the deny decision in the local event/alert metadata.
+
+Check the local CLI process setting:
+
+```powershell
+py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:7330
+```
+
 ## Current Components
 
 - FastAPI backend
@@ -36,6 +55,7 @@ The repo still contains legacy/demo coding-agent rules for seeded demos and eval
 - local stdio MCP wrapper/tap path at `backend/scripts/aiwatch_stdio_tap.py`
 - experimental local HTTP MCP relay at `backend/scripts/aiwatch_http_mcp_relay.py`
 - `aiwatch doctor` config health check for local `.mcp.json` and `.cursor/mcp.json`
+- opt-in deny mode for selected routed MCP tool calls
 - deterministic local eval harness
 
 Real ingestion paths use the canonical backend ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
@@ -131,6 +151,14 @@ Expected:
 
 Scope: this is a local-only, experimental, MCP-specific POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
 
+Check opt-in routed MCP enforcement mode:
+
+```powershell
+py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:7330
+```
+
+To enable deny mode for a local relay/wrapper process, set `AIWATCH_ENFORCEMENT_MODE=deny` before starting that process. Leave it unset or set it to `observe` for alert-only behavior.
+
 Run the config health check from the repo root:
 
 ```powershell
@@ -155,6 +183,7 @@ py -3.12 eval\run_eval.py
 - Missing session replay requests return `404`.
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude Code internals, Cursor internals, or arbitrary local process activity.
 - AIWatch does not guarantee prevention of all exfiltration.
+- Deny mode is opt-in and limited to selected routed MCP tool calls; current deny coverage starts with `R-MCP-005`.
 - AIWatch does not implement production auth, HMAC logs, semantic embeddings, full Streamable HTTP, SSE, GET stream handling, a generic HTTP proxy, production-ready proxying, SIEM/exporters, ML detection, or Cursor runtime support.
 - `aiwatch doctor` checks config shape only; it cannot prove a client loaded that config or prevent config tampering.
 
