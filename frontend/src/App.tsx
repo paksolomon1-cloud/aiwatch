@@ -906,7 +906,7 @@ function App() {
           <span className="panel-label">Current proof points</span>
           <div className="proof-grid">
             <div>
-              <strong>130</strong>
+              <strong>135</strong>
               <span>tests passing</span>
             </div>
             <div>

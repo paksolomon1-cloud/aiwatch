@@ -74,7 +74,7 @@ R-MCP-005 is deterministic credential-shaped value detection in MCP tools/call p
 Say:
 
 ```text
-The current proof set is 130 backend tests passing, 39/39 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
+The current proof set is 135 backend tests passing, 39/39 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
 ```
 
 ## Rehearsal Proof Commands
@@ -140,7 +140,7 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- `130 passed`
+- `135 passed`
 - eval total cases: `39`
 - eval passed cases: `39`
 - false positives: none

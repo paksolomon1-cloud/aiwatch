@@ -151,7 +151,7 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `130 passed`
+- tests: `135 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
 - second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
@@ -232,7 +232,7 @@ Does not catch:
 
 ## 7. Proof points
 
-- `pytest`: `130 passed`
+- `pytest`: `135 passed`
 - `eval`: `39/39`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke
