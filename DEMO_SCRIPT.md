@@ -6,6 +6,8 @@ For the single day-of-demo flow, use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). This fi
 
 Veea is the broader runtime-security vision; AIWatch is the working MCP-first proof point. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-shaped MCP tool-call parameters.
 
+Veea's Lobster Trap covers the model conversation layer; AIWatch adds the MCP tool layer, where agents discover and invoke tools.
+
 ## 30-Second Explanation
 
 - MCP gives agents tools.

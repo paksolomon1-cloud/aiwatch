@@ -8,6 +8,8 @@ AIWatch is MCP-first. It is not generic Claude Code monitoring, Cursor monitorin
 
 Veea is the broader runtime-security vision for tool-using AI agents. AIWatch is the current working MCP-first implementation, focused on MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
+Veea Lobster Trap is the baseline prompt/response-layer companion for OpenAI-compatible LLM traffic. AIWatch adds MCP tool-layer visibility alongside Lobster Trap. Together they demonstrate a side-by-side layered runtime-security story; they are not a fused runtime pipeline unless a bridge is implemented and verified.
+
 Future Veea directions may include additional adapters beyond MCP, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility. Those are future product directions, not current AIWatch capabilities.
 
 ## Current Detection

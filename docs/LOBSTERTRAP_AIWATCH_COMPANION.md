@@ -1,15 +1,48 @@
 # Veea Lobster Trap And AIWatch Companion Demo
 
-This note describes a bounded side-by-side demo path for Veea Lobster Trap and AIWatch.
+This note describes a bounded side-by-side demo path for Veea Lobster Trap and AIWatch. Lobster Trap is the baseline prompt/response-layer security component. AIWatch is the MCP tool-layer extension and proof point that complements it.
 
 It does not describe a verified event bridge between the two projects. The current safe story is layered runtime security:
 
-- Lobster Trap covers the conversation/model layer.
-- AIWatch covers the MCP tool layer.
+- Lobster Trap covers the conversation/model layer for OpenAI-compatible LLM traffic.
+- AIWatch covers the routed MCP tool layer.
+
+## Baseline vs Extension
+
+Lobster Trap baseline:
+
+- prompt/response policy proxy for LLM inference
+- OpenAI-compatible reverse proxy path
+- ingress and egress deep prompt inspection
+- policy decisions and audit trail
+
+AIWatch extension/proof point:
+
+- MCP tool-traffic observability through the AIWatch stdio wrapper or local HTTP MCP relay
+- MCP tool registry and fingerprints
+- deterministic tool-risk checks for poisoned descriptions, drift, shadowing, and credential-shaped MCP tool-call parameters
+
+The combined demo shows two runtime security surfaces rather than one monolithic integration.
+
+## Layered Architecture
+
+```text
+Agent / App
+  |-- LLM calls ----------> Lobster Trap ----------> OpenAI-compatible backend
+  |                         - prompt/response inspection
+  |                         - policy decisions
+  |                         - audit trail
+  |
+  `-- MCP tool traffic ---> AIWatch wrapper/relay -> MCP servers
+                            - tool registry/fingerprints
+                            - poisoned description detection
+                            - drift/shadowing detection
+                            - credential-shaped parameter detection/redaction
+```
 
 ## What Lobster Trap Covers
 
-Lobster Trap is a Veea deep prompt inspection proxy for OpenAI-compatible LLM traffic. It sits between an agent or app and an OpenAI-compatible LLM backend, inspects prompts and responses, and applies policy rules.
+Lobster Trap is a Veea deep prompt inspection proxy for OpenAI-compatible LLM traffic. It sits between an agent or app and an OpenAI-compatible LLM backend, inspects prompts and responses, and applies policy rules. In the hackathon story, it is the baseline conversation/model-layer protection.
 
 Verified from the local Lobster Trap repo:
 
@@ -28,7 +61,7 @@ AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local H
 - MCP tool name shadowing
 - credential-shaped MCP `tools/call` parameters
 
-AIWatch does not observe prompts, model responses, shell commands, file edits, hidden reasoning, Claude/Cursor internals, the whole laptop, or arbitrary network traffic.
+In the layered Veea story, AIWatch adds MCP tool-layer visibility alongside Lobster Trap. AIWatch does not observe prompts, model responses, shell commands, file edits, hidden reasoning, Claude/Cursor internals, the whole laptop, or arbitrary network traffic.
 
 ## Why They Complement Each Other
 
@@ -45,9 +78,31 @@ This is a companion discovery path, not a verified combined integration.
 
 - AIWatch does not send events to Lobster Trap.
 - Lobster Trap does not feed events into AIWatch.
+- There is no shared dashboard or shared event bus yet.
 - AIWatch does not implement Lobster Trap prompt/response inspection.
 - Lobster Trap should not be described as covering MCP tool traffic unless that is separately implemented and verified.
+- Lobster Trap `serve` mode was not verified locally because no OpenAI-compatible backend was listening on `localhost:11434`.
 - The current safe demo is side-by-side operation and explanation.
+
+## What Is Not Integrated Yet
+
+- No AIWatch-to-Lobster-Trap event forwarding exists.
+- No Lobster-Trap-to-AIWatch ingestion exists.
+- No shared policy engine or shared audit timeline exists.
+- No shared dashboard panel exists.
+- Lobster Trap was not verified as an MCP traffic observer.
+- AIWatch was not verified as a prompt/response proxy.
+- Live Lobster Trap proxy mode was not verified locally because no OpenAI-compatible backend was running.
+
+## Future Integration Path
+
+These are future directions, not current implementation claims:
+
+- define a shared event envelope for prompt-layer and MCP-tool-layer observations
+- add a shared audit timeline that can show Lobster Trap and AIWatch events together
+- correlate prompt-layer policy decisions with MCP tool-layer events when the same agent/session identity is available
+- add a unified dashboard panel after a real shared event path exists
+- consider optional policy or blocking actions only after explicit implementation, false-positive review, and validation
 
 ## Windows Setup Notes Verified Locally
 
