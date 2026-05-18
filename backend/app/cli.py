@@ -687,6 +687,21 @@ def build_demo_blocked_mcp_attack_result(*, backend_url: str) -> dict[str, Any]:
         annotate_enforcement_decision(event, decision)
         for event in events
     ]
+    annotated_events = [
+        event.model_copy(
+            update={
+                "action_params": {
+                    **event.action_params,
+                    "upstream_contacted": False,
+                    "upstream": {
+                        "contacted": False,
+                        "note": "Safe local demo helper did not start or contact an upstream MCP server.",
+                    },
+                },
+            }
+        )
+        for event in annotated_events
+    ]
 
     posted_event_ids: list[str] = []
     alerts_created = 0

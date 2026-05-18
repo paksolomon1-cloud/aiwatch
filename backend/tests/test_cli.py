@@ -446,6 +446,8 @@ def test_demo_blocked_mcp_attack_posts_redacted_deny_event_without_upstream(monk
     assert body["action_type"] == "tool_call"
     assert body["action_params"]["tool_name"] == "export_notes"
     assert body["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
+    assert body["action_params"]["upstream_contacted"] is False
+    assert body["action_params"]["upstream"]["contacted"] is False
     assert body["action_params"]["enforcement"] == {
         "action": "deny",
         "enforcement_mode": "deny",

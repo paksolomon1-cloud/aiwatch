@@ -2441,7 +2441,7 @@ function App() {
             </div>
             <div className="proof-grid">
               <div>
-                <strong>175</strong>
+                <strong>208</strong>
                 <span>backend tests passing</span>
               </div>
               <div>
