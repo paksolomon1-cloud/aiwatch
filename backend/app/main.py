@@ -4,12 +4,14 @@ import json
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app.credential_redaction import redact_json_like
@@ -41,6 +43,10 @@ from app.veea_audit import build_veea_audit_timeline, lobstertrap_record_to_veea
 DEV_MODE_TRUTHY_VALUES = {"1", "true", "yes", "on"}
 MAX_EVENT_REQUEST_BODY_BYTES = 4 * 1024 * 1024
 LOBSTERTRAP_ACTIVE_THRESHOLD_SECONDS = 5 * 60
+FRONTEND_DIST_ENV_VAR = "AIWATCH_FRONTEND_DIST"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_FRONTEND_DIST_DIR = REPO_ROOT / "frontend" / "dist"
+SPA_RESERVED_PREFIXES = {"api", "v1", "health", "assets", "docs", "redoc", "openapi.json"}
 LOBSTERTRAP_SUGGESTED_INGEST_COMMAND = (
     "py -3.12 scripts\\aiwatch.py ingest-lobstertrap-audit --file <jsonl> "
     "--backend-url http://127.0.0.1:7330"
@@ -84,6 +90,43 @@ def _replit_event_response() -> list[dict[str, object]]:
         return _demo_replit_events()
 
     return list(_replit_recent_events)
+
+
+def _frontend_dist_dir() -> Path:
+    configured_dist = os.environ.get(FRONTEND_DIST_ENV_VAR)
+    if configured_dist and configured_dist.strip():
+        return Path(configured_dist)
+
+    return DEFAULT_FRONTEND_DIST_DIR
+
+
+def _frontend_index_path() -> Path:
+    return _frontend_dist_dir() / "index.html"
+
+
+def _frontend_dist_file(relative_path: str) -> Path | None:
+    dist_dir = _frontend_dist_dir().resolve()
+    candidate = (dist_dir / relative_path).resolve()
+
+    try:
+        candidate.relative_to(dist_dir)
+    except ValueError:
+        return None
+
+    return candidate
+
+
+def _frontend_index_response() -> FileResponse | None:
+    index_path = _frontend_index_path()
+    if not index_path.is_file():
+        return None
+
+    return FileResponse(index_path, media_type="text/html")
+
+
+def _is_spa_reserved_path(path: str) -> bool:
+    first_segment = path.split("/", 1)[0]
+    return first_segment in SPA_RESERVED_PREFIXES
 
 
 def _dashboard_html() -> str:
@@ -534,6 +577,15 @@ app.add_middleware(
 )
 
 
+def _mount_frontend_assets() -> None:
+    assets_dir = _frontend_dist_dir() / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+
+
+_mount_frontend_assets()
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
@@ -850,7 +902,11 @@ def _tool_quarantine_response(
 
 
 @app.get("/", response_class=HTMLResponse)
-def root() -> HTMLResponse:
+def root() -> Response:
+    frontend_index = _frontend_index_response()
+    if frontend_index is not None:
+        return frontend_index
+
     return HTMLResponse(_dashboard_html())
 
 
@@ -1074,3 +1130,19 @@ def health() -> dict[str, int | str]:
         "events": count_events(),
         "alerts": count_alerts(),
     }
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def frontend_spa_fallback(path: str) -> Response:
+    static_file = _frontend_dist_file(path)
+    if static_file is not None and static_file.is_file():
+        return FileResponse(static_file)
+
+    if _is_spa_reserved_path(path):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    frontend_index = _frontend_index_response()
+    if frontend_index is not None:
+        return frontend_index
+
+    raise HTTPException(status_code=404, detail="Not Found")

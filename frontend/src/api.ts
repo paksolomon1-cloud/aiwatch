@@ -13,10 +13,11 @@ import type {
   ToolQuarantineResponse,
 } from './types'
 
-const BACKEND_URL = 'http://127.0.0.1:7330'
+const configuredBackendUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const BACKEND_URL = configuredBackendUrl || (import.meta.env.DEV ? 'http://127.0.0.1:7330' : '')
 
 export const BACKEND_OFFLINE_MESSAGE =
-  'Backend offline or blocked. Start the backend with: py -3.12 -m uvicorn app.main:app --reload --port 7330. Demo controls require AIWATCH_DEV_MODE=true.'
+  'Backend offline or blocked. Local dev: start the backend with py -3.12 -m uvicorn app.main:app --reload --port 7330. Hosted builds use same-origin API paths. Demo controls require AIWATCH_DEV_MODE=true.'
 
 export class AiWatchApiError extends Error {
   status: number

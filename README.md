@@ -206,13 +206,18 @@ Lobster Trap prompt/response audit records are ingested into AIWatch's local uni
 
 ## Replit Hosted Demo
 
-AIWatch can run as a single Replit-hosted judge demo app. The hosted app serves a minimal dashboard, accepts JSON event summaries at `POST /api/events`, keeps recent events in memory, and shows sample rows when no real event summaries have been received.
+AIWatch can run as a single Replit-hosted judge demo app. The Replit command builds the React dashboard into `frontend/dist`, then FastAPI serves that compiled dashboard at `/` from the same public link as the backend APIs. If `frontend/dist` is missing, FastAPI falls back to the lightweight summary page.
+
+The hosted app also accepts JSON event summaries at `POST /api/events`, keeps recent events in memory, and returns sample rows when no real event summaries have been received.
 
 The hosted demo keeps the same scope boundary: AIWatch observes MCP traffic routed through the AIWatch wrapper or relay. It does not monitor prompts, Claude/Cursor globally, shell commands, file edits, hidden reasoning, the laptop, or arbitrary network traffic.
 
 Local run equivalent:
 
 ```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm install
+npm run build
 cd C:\Users\pakso\Desktop\aiwatch\backend
 $env:PORT="3000"
 py -3.12 -m uvicorn app.main:app --host 0.0.0.0 --port $env:PORT
@@ -221,7 +226,7 @@ py -3.12 -m uvicorn app.main:app --host 0.0.0.0 --port $env:PORT
 Replit run command:
 
 ```bash
-pip install -r backend/requirements.txt && cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000}
+pip install -r backend/requirements.txt && cd frontend && npm install && npm run build && cd ../backend && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-3000}
 ```
 
 Smoke test the hosted demo API:

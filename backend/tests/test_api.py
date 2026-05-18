@@ -1291,7 +1291,9 @@ def test_replit_health_route_returns_service_json() -> None:
     assert response.json() == {"ok": True, "service": "aiwatch"}
 
 
-def test_replit_dashboard_route_serves_scoped_html() -> None:
+def test_replit_dashboard_route_serves_scoped_html_when_dist_missing(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv(main_module.FRONTEND_DIST_ENV_VAR, str(tmp_path / "missing-dist"))
+
     with TestClient(app) as client:
         response = client.get("/")
 
@@ -1303,6 +1305,65 @@ def test_replit_dashboard_route_serves_scoped_html() -> None:
     assert "AIWatch observes MCP traffic routed through the AIWatch wrapper or relay." in html
     assert "Recent events" in html
     assert "fetch('/api/events')" in html
+
+
+def test_root_serves_built_react_dashboard_without_swallowing_api_routes(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    dist_dir = tmp_path / "frontend-dist"
+    dist_dir.mkdir()
+    (dist_dir / "favicon.svg").write_text("<svg>aiwatch</svg>", encoding="utf-8")
+    index_html = """<!doctype html>
+<html>
+  <head>
+    <title>AIWatch Dashboard Fixture</title>
+  </head>
+  <body>
+    <div id="root">React dashboard fixture</div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>"""
+    (dist_dir / "index.html").write_text(index_html, encoding="utf-8")
+    monkeypatch.setenv(main_module.FRONTEND_DIST_ENV_VAR, str(dist_dir))
+
+    with TestClient(app) as client:
+        root_response = client.get("/")
+        spa_response = client.get("/tools/registry")
+        favicon_response = client.get("/favicon.svg")
+        health_response = client.get("/health")
+        api_events_response = client.get("/api/events")
+        v1_health_response = client.get("/v1/health")
+        missing_api_response = client.get("/api/not-real")
+        missing_v1_response = client.get("/v1/not-real")
+
+    assert root_response.status_code == 200
+    assert "React dashboard fixture" in root_response.text
+    assert "<h1>AIWatch</h1>" not in root_response.text
+
+    assert spa_response.status_code == 200
+    assert "React dashboard fixture" in spa_response.text
+
+    assert favicon_response.status_code == 200
+    assert favicon_response.text == "<svg>aiwatch</svg>"
+
+    assert health_response.status_code == 200
+    assert health_response.json() == {"ok": True, "service": "aiwatch"}
+
+    assert api_events_response.status_code == 200
+    assert isinstance(api_events_response.json(), list)
+
+    assert v1_health_response.status_code == 200
+    assert v1_health_response.json()["status"] == "healthy"
+
+    assert missing_api_response.status_code == 404
+    assert "React dashboard fixture" not in missing_api_response.text
+
+    assert missing_v1_response.status_code == 404
+    assert "React dashboard fixture" not in missing_v1_response.text
+
+    clear_db()
 
 
 def test_replit_events_get_returns_event_list() -> None:
