@@ -14,6 +14,8 @@ The demo shows current AIWatch proof, not the full future Veea product. Future V
 
 Optional companion framing: we use Veea Lobster Trap as the prompt/response-layer baseline and AIWatch as the MCP tool-layer extension. The immediate value is layered runtime visibility across model conversations and routed MCP tools; the future path is unified policy and audit across both layers after a real bridge is implemented and verified.
 
+Phase 0 technical bridge: AIWatch can export MCP-layer alerts into a Veea-style audit JSONL envelope as a first interop primitive. This is export-only, not live Lobster Trap forwarding or a shared runtime pipeline.
+
 ## 3. 5-minute demo script
 
 ### Open dashboard

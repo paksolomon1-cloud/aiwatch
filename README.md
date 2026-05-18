@@ -10,6 +10,8 @@ Veea is the broader runtime-security vision for tool-using AI agents. AIWatch is
 
 Veea Lobster Trap is the baseline prompt/response-layer companion for OpenAI-compatible LLM traffic. AIWatch adds MCP tool-layer visibility alongside Lobster Trap. Together they demonstrate a side-by-side layered runtime-security story; they are not a fused runtime pipeline unless a bridge is implemented and verified.
 
+Phase 0 interop is export-only: `py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl` writes stored AIWatch MCP alerts as JSONL in a Veea-style companion audit envelope. It does not forward events to Lobster Trap or require Lobster Trap to be running.
+
 Future Veea directions may include additional adapters beyond MCP, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility. Those are future product directions, not current AIWatch capabilities.
 
 ## Current Detection
@@ -29,6 +31,7 @@ The repo still contains legacy/demo coding-agent rules for seeded demos and eval
 - tool fingerprinting
 - deterministic alert engine
 - CLI wrapper at `backend/scripts/aiwatch.py`
+- Veea-style companion audit JSONL export for stored MCP alerts
 - React dashboard
 - local stdio MCP wrapper/tap path at `backend/scripts/aiwatch_stdio_tap.py`
 - experimental local HTTP MCP relay at `backend/scripts/aiwatch_http_mcp_relay.py`

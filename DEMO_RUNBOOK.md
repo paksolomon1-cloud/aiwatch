@@ -108,6 +108,20 @@ Expected:
 
 Then run the normal AIWatch dashboard flow below: seed the core demo, seed the extended MCP registry demo, trigger `R-MCP-005`, and show MCP tool definitions, drift, shadowing, and redacted credential-shaped MCP tool-call evidence.
 
+After AIWatch has alerts in the local backend database, export the MCP-layer alerts as the Phase 0 interop artifact:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl
+Get-Content .\veea-aiwatch-audit.jsonl -TotalCount 5
+```
+
+Say:
+
+```text
+This JSONL file is the first technical bridge: AIWatch exports MCP-layer alerts into a Veea-style audit envelope. It is an export artifact, not live forwarding to Lobster Trap and not a shared runtime pipeline yet.
+```
+
 Say:
 
 ```text

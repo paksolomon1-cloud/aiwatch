@@ -37,6 +37,8 @@ def test_parser_recognizes_other_commands() -> None:
     assert parser.parse_args(["doctor", "--json"]).json is True
     assert parser.parse_args(["tools"]).command == "tools"
     assert parser.parse_args(["alerts"]).command == "alerts"
+    assert parser.parse_args(["export-veea-audit"]).command == "export-veea-audit"
+    assert parser.parse_args(["export-veea-audit", "--out", "audit.jsonl"]).out == Path("audit.jsonl")
 
 
 def test_help_text_lists_supported_commands() -> None:
@@ -49,6 +51,7 @@ def test_help_text_lists_supported_commands() -> None:
     assert "doctor" in help_text
     assert "tools" in help_text
     assert "alerts" in help_text
+    assert "export-veea-audit" in help_text
 
 
 def test_format_table_renders_headers_and_rows() -> None:

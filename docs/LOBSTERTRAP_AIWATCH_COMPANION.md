@@ -2,10 +2,11 @@
 
 This note describes a bounded side-by-side demo path for Veea Lobster Trap and AIWatch. Lobster Trap is the baseline prompt/response-layer security component. AIWatch is the MCP tool-layer extension and proof point that complements it.
 
-It does not describe a verified event bridge between the two projects. The current safe story is layered runtime security:
+It does not describe a verified live event bridge between the two projects. The current safe story is layered runtime security:
 
 - Lobster Trap covers the conversation/model layer for OpenAI-compatible LLM traffic.
 - AIWatch covers the routed MCP tool layer.
+- AIWatch can export stored MCP-layer alerts as a Veea-style companion audit JSONL artifact.
 
 ## Baseline vs Extension
 
@@ -74,11 +75,12 @@ Lobster Trap demonstrates policy inspection at the OpenAI-compatible prompt/resp
 
 ## Current Status
 
-This is a companion discovery path, not a verified combined integration.
+This is a companion discovery path, not a verified combined runtime integration.
 
 - AIWatch does not send events to Lobster Trap.
 - Lobster Trap does not feed events into AIWatch.
 - There is no shared dashboard or shared event bus yet.
+- AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts.
 - AIWatch does not implement Lobster Trap prompt/response inspection.
 - Lobster Trap should not be described as covering MCP tool traffic unless that is separately implemented and verified.
 - Lobster Trap `serve` mode was not verified locally because no OpenAI-compatible backend was listening on `localhost:11434`.
@@ -103,6 +105,66 @@ These are future directions, not current implementation claims:
 - correlate prompt-layer policy decisions with MCP tool-layer events when the same agent/session identity is available
 - add a unified dashboard panel after a real shared event path exists
 - consider optional policy or blocking actions only after explicit implementation, false-positive review, and validation
+
+## Phase 0 Interop: AIWatch Veea Audit Export
+
+AIWatch can export stored MCP-layer alerts as JSONL using a Veea-style companion audit envelope. This is the first technical interop primitive between the prompt/response-layer Lobster Trap story and the MCP tool-layer AIWatch story.
+
+Run from the AIWatch backend directory after AIWatch has ingested alerts:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl
+Get-Content .\veea-aiwatch-audit.jsonl -TotalCount 5
+```
+
+Each JSONL line represents one exported AIWatch MCP alert. The export does not require Lobster Trap to be installed or running, does not query Lobster Trap, and does not write to a Lobster Trap ingestion API.
+
+Example envelope shape:
+
+```json
+{
+  "schema": "veea.aiwatch.audit.v1",
+  "source": "aiwatch",
+  "layer": "mcp_tool",
+  "event_type": "security_alert",
+  "rule_id": "R-MCP-005",
+  "severity": "critical",
+  "decision": "block",
+  "summary": "Credential-shaped value in MCP tool call parameters",
+  "timestamp": "2026-05-17T00:00:00Z",
+  "server_id": "notes-mcp",
+  "tool_name": "export_notes",
+  "session_id": "demo-session",
+  "agent_id": "mcp-client",
+  "redacted": true,
+  "evidence": {
+    "credential_findings": [
+      {
+        "param_path": "params.arguments.api_key",
+        "secret_type": "openai_key_like",
+        "redacted_value": "[REDACTED:OPENAI_KEY]",
+        "value_length": 35
+      }
+    ]
+  },
+  "aiwatch": {
+    "alert_id": "alert-id",
+    "event_id": "event-id",
+    "event_ids": ["event-id"],
+    "source": "mcp",
+    "transport": "routed_mcp_unspecified",
+    "detector": "deterministic_mcp"
+  }
+}
+```
+
+Limitations:
+
+- This is an export artifact, not live AIWatch-to-Lobster-Trap forwarding.
+- No Lobster Trap ingestion API compatibility is claimed or verified.
+- The export includes AIWatch MCP-layer alerts only; it is not prompt/response monitoring.
+- Evidence uses AIWatch's stored sanitized/redacted alert data plus export-level redaction safety.
 
 ## Windows Setup Notes Verified Locally
 

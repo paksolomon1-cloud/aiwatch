@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from app.storage import clear_db
+from app.storage import clear_db, init_db, list_alerts as list_local_alerts
+from app.veea_audit import build_veea_audit_envelopes, render_veea_audit_jsonl, write_veea_audit_jsonl
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_BACKEND_URL = "http://127.0.0.1:7330"
@@ -329,6 +330,13 @@ def build_parser() -> argparse.ArgumentParser:
     alerts_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     alerts_parser.set_defaults(handler=handle_alerts)
 
+    export_parser = subparsers.add_parser(
+        "export-veea-audit",
+        help="Export stored MCP alerts as Veea companion audit JSONL.",
+    )
+    export_parser.add_argument("--out", type=Path, help="Write JSONL to this file instead of stdout.")
+    export_parser.set_defaults(handler=handle_export_veea_audit)
+
     return parser
 
 
@@ -446,6 +454,21 @@ def handle_alerts(args: argparse.Namespace) -> int:
         )
 
     print(format_table(["SEVERITY", "RULE_ID", "DECISION", "SESSION_ID", "EVENT_ID", "SUMMARY"], rows))
+    return 0
+
+
+def handle_export_veea_audit(args: argparse.Namespace) -> int:
+    init_db()
+    envelopes = build_veea_audit_envelopes(list_local_alerts())
+
+    if args.out:
+        output_path = Path(args.out)
+        write_veea_audit_jsonl(envelopes, output_path)
+        print(f"Exported {len(envelopes)} AIWatch MCP alert audit envelopes to {output_path}.")
+        return 0
+
+    sys.stdout.write(render_veea_audit_jsonl(envelopes))
+    print(f"Exported {len(envelopes)} AIWatch MCP alert audit envelopes to stdout.", file=sys.stderr)
     return 0
 
 
