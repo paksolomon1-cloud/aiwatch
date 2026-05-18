@@ -24,6 +24,9 @@ from app.storage import (
     get_tool_history,
     get_session_alerts,
     get_session_events,
+    quarantine_tools,
+    unquarantine_tools,
+    list_quarantined_tools,
     ingest_event,
     insert_audit_record,
     init_db,
@@ -335,6 +338,24 @@ def _audit_summary(records: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _optional_selector(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _tool_quarantine_selector(payload: object) -> tuple[str | None, str | None, str | None]:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Request body must be a JSON object")
+
+    tool_name = _optional_selector(payload.get("tool_name"))
+    fingerprint_id = _optional_selector(payload.get("fingerprint_id") or payload.get("fingerprint"))
+    reason = _optional_selector(payload.get("reason"))
+
+    if tool_name is None and fingerprint_id is None:
+        raise HTTPException(status_code=400, detail="tool_name or fingerprint_id is required")
+
+    return tool_name, fingerprint_id, reason
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {
@@ -411,6 +432,41 @@ def read_alerts() -> list[Alert]:
 @app.get("/v1/tools", response_model=list[ToolFingerprint])
 def read_tools() -> list[ToolFingerprint]:
     return load_tools()
+
+
+@app.get("/v1/tools/quarantined", response_model=list[ToolFingerprint])
+def read_quarantined_tools() -> list[ToolFingerprint]:
+    return list_quarantined_tools()
+
+
+@app.post("/v1/tools/quarantine")
+async def quarantine_tool(request: Request) -> dict[str, object]:
+    tool_name, fingerprint_id, reason = _tool_quarantine_selector(
+        _parse_json_payload(await _read_event_request_body(request))
+    )
+    tools = quarantine_tools(tool_name=tool_name, fingerprint_id=fingerprint_id, reason=reason)
+    if not tools:
+        raise HTTPException(status_code=404, detail="No matching tool fingerprint found")
+    return {
+        "status": "ok",
+        "updated": len(tools),
+        "tools": tools,
+    }
+
+
+@app.post("/v1/tools/unquarantine")
+async def unquarantine_tool(request: Request) -> dict[str, object]:
+    tool_name, fingerprint_id, _reason = _tool_quarantine_selector(
+        _parse_json_payload(await _read_event_request_body(request))
+    )
+    tools = unquarantine_tools(tool_name=tool_name, fingerprint_id=fingerprint_id)
+    if not tools:
+        raise HTTPException(status_code=404, detail="No matching tool fingerprint found")
+    return {
+        "status": "ok",
+        "updated": len(tools),
+        "tools": tools,
+    }
 
 
 @app.get("/v1/tools/{fingerprint_id}", response_model=ToolFingerprint)

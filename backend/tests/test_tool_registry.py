@@ -87,6 +87,55 @@ def test_tool_fingerprint_creation_and_history(monkeypatch, tmp_path: Path) -> N
     clear_db()
 
 
+def test_tool_quarantine_api_sets_lists_and_clears_by_name_and_fingerprint(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    event = benign_mcp_event(agent_id="mcp-client-demo", session_id="tools-quarantine", server_id="notes-mcp")
+
+    with TestClient(app) as client:
+        create_response = client.post("/v1/events", json=_payload(event))
+        assert create_response.status_code == 200
+
+        tools_response = client.get("/v1/tools")
+        tool = tools_response.json()[0]
+        fingerprint_id = tool["fingerprint_id"]
+
+        quarantine_response = client.post(
+            "/v1/tools/quarantine",
+            json={"tool_name": tool["tool_name"], "reason": "demo suspicious tool"},
+        )
+        assert quarantine_response.status_code == 200
+        assert quarantine_response.json()["updated"] == 1
+        assert quarantine_response.json()["tools"][0]["quarantined"] is True
+        assert quarantine_response.json()["tools"][0]["quarantine_reason"] == "demo suspicious tool"
+
+        listed_response = client.get("/v1/tools/quarantined")
+        assert listed_response.status_code == 200
+        assert [item["fingerprint_id"] for item in listed_response.json()] == [fingerprint_id]
+
+        clear_response = client.post("/v1/tools/unquarantine", json={"fingerprint_id": fingerprint_id})
+        assert clear_response.status_code == 200
+        assert clear_response.json()["updated"] == 1
+
+        listed_after_clear_response = client.get("/v1/tools/quarantined")
+        assert listed_after_clear_response.status_code == 200
+        assert listed_after_clear_response.json() == []
+
+        quarantine_by_fingerprint_response = client.post(
+            "/v1/tools/quarantine",
+            json={"fingerprint_id": fingerprint_id, "reason": "fingerprint-specific stop"},
+        )
+        assert quarantine_by_fingerprint_response.status_code == 200
+        assert quarantine_by_fingerprint_response.json()["tools"][0]["quarantine_reason"] == (
+            "fingerprint-specific stop"
+        )
+
+    clear_db()
+
+
 def test_blank_description_still_creates_tool_fingerprint(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
 

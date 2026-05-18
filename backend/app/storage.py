@@ -97,6 +97,9 @@ def _tool_fingerprint_to_row(tool: ToolFingerprint) -> dict[str, object]:
         "observation_count": payload["observation_count"],
         "drift_count": payload["drift_count"],
         "latest_event_id": payload["latest_event_id"],
+        "quarantined": 1 if payload["quarantined"] else 0,
+        "quarantine_reason": payload["quarantine_reason"],
+        "quarantined_at": payload["quarantined_at"],
     }
 
 
@@ -194,6 +197,9 @@ def _tool_fingerprint_from_row(row: sqlite3.Row) -> ToolFingerprint:
         observation_count=row["observation_count"],
         drift_count=row["drift_count"],
         latest_event_id=row["latest_event_id"],
+        quarantined=bool(row["quarantined"]),
+        quarantine_reason=row["quarantine_reason"],
+        quarantined_at=row["quarantined_at"],
     )
 
 
@@ -316,6 +322,21 @@ def init_db() -> None:
             );
             """
         )
+        _ensure_tool_fingerprint_quarantine_columns(connection)
+
+
+def _ensure_tool_fingerprint_quarantine_columns(connection: sqlite3.Connection) -> None:
+    rows = connection.execute("PRAGMA table_info(tool_fingerprints)").fetchall()
+    columns = {str(row["name"]) for row in rows}
+
+    if "quarantined" not in columns:
+        connection.execute(
+            "ALTER TABLE tool_fingerprints ADD COLUMN quarantined INTEGER NOT NULL DEFAULT 0"
+        )
+    if "quarantine_reason" not in columns:
+        connection.execute("ALTER TABLE tool_fingerprints ADD COLUMN quarantine_reason TEXT")
+    if "quarantined_at" not in columns:
+        connection.execute("ALTER TABLE tool_fingerprints ADD COLUMN quarantined_at TEXT")
 
 
 def insert_event(event: AgentEvent, *, connection: sqlite3.Connection | None = None) -> None:
@@ -434,7 +455,10 @@ def upsert_tool_fingerprint(
                 last_seen,
                 observation_count,
                 drift_count,
-                latest_event_id
+                latest_event_id,
+                quarantined,
+                quarantine_reason,
+                quarantined_at
             )
             VALUES (
                 :fingerprint_id,
@@ -448,7 +472,10 @@ def upsert_tool_fingerprint(
                 :last_seen,
                 :observation_count,
                 :drift_count,
-                :latest_event_id
+                :latest_event_id,
+                :quarantined,
+                :quarantine_reason,
+                :quarantined_at
             )
             ON CONFLICT(fingerprint_id) DO UPDATE SET
                 server_id = excluded.server_id,
@@ -573,9 +600,24 @@ def list_alerts() -> list[Alert]:
 
 
 def list_tools() -> list[ToolFingerprint]:
+    init_db()
     with _connect() as connection:
         rows = connection.execute(
             "SELECT * FROM tool_fingerprints ORDER BY last_seen DESC, tool_name ASC"
+        ).fetchall()
+    return [_tool_fingerprint_from_row(row) for row in rows]
+
+
+def list_quarantined_tools() -> list[ToolFingerprint]:
+    init_db()
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM tool_fingerprints
+            WHERE quarantined = 1
+            ORDER BY quarantined_at DESC, tool_name ASC, server_id ASC
+            """
         ).fetchall()
     return [_tool_fingerprint_from_row(row) for row in rows]
 
@@ -607,10 +649,116 @@ def get_tool_fingerprint(
     *,
     connection: sqlite3.Connection | None = None,
 ) -> ToolFingerprint | None:
+    if connection is None:
+        init_db()
     with _connection_scope(connection) as active_connection:
         row = active_connection.execute(
             "SELECT * FROM tool_fingerprints WHERE fingerprint_id = ?",
             (fingerprint_id,),
+        ).fetchone()
+    return _tool_fingerprint_from_row(row) if row is not None else None
+
+
+def _tool_match_clause(
+    *,
+    tool_name: str | None,
+    fingerprint_id: str | None,
+) -> tuple[str, tuple[object, ...]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if tool_name:
+        clauses.append("tool_name = ?")
+        params.append(tool_name)
+    if fingerprint_id:
+        clauses.append("fingerprint_id = ?")
+        params.append(fingerprint_id)
+    if not clauses:
+        raise ValueError("tool_name or fingerprint_id is required")
+    return " AND ".join(clauses), tuple(params)
+
+
+def quarantine_tools(
+    *,
+    tool_name: str | None = None,
+    fingerprint_id: str | None = None,
+    reason: str | None = None,
+) -> list[ToolFingerprint]:
+    init_db()
+    where_clause, params = _tool_match_clause(tool_name=tool_name, fingerprint_id=fingerprint_id)
+    normalized_reason = reason.strip() if isinstance(reason, str) and reason.strip() else None
+    quarantined_at = _utc_now_text()
+
+    with _connect() as connection:
+        connection.execute(
+            f"""
+            UPDATE tool_fingerprints
+            SET quarantined = 1,
+                quarantine_reason = ?,
+                quarantined_at = ?
+            WHERE {where_clause}
+            """,
+            (normalized_reason, quarantined_at, *params),
+        )
+        rows = connection.execute(
+            f"SELECT * FROM tool_fingerprints WHERE {where_clause} ORDER BY tool_name ASC, server_id ASC",
+            params,
+        ).fetchall()
+    return [_tool_fingerprint_from_row(row) for row in rows]
+
+
+def unquarantine_tools(
+    *,
+    tool_name: str | None = None,
+    fingerprint_id: str | None = None,
+) -> list[ToolFingerprint]:
+    init_db()
+    where_clause, params = _tool_match_clause(tool_name=tool_name, fingerprint_id=fingerprint_id)
+
+    with _connect() as connection:
+        rows = connection.execute(
+            f"SELECT * FROM tool_fingerprints WHERE {where_clause} ORDER BY tool_name ASC, server_id ASC",
+            params,
+        ).fetchall()
+        connection.execute(
+            f"""
+            UPDATE tool_fingerprints
+            SET quarantined = 0,
+                quarantine_reason = NULL,
+                quarantined_at = NULL
+            WHERE {where_clause}
+            """,
+            params,
+        )
+    return [_tool_fingerprint_from_row(row) for row in rows]
+
+
+def get_quarantined_tool_for_call(
+    *,
+    tool_name: str,
+    fingerprint_id: str | None = None,
+) -> ToolFingerprint | None:
+    init_db()
+    with _connect() as connection:
+        if fingerprint_id:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM tool_fingerprints
+                WHERE fingerprint_id = ? AND quarantined = 1
+                """,
+                (fingerprint_id,),
+            ).fetchone()
+            if row is not None:
+                return _tool_fingerprint_from_row(row)
+
+        row = connection.execute(
+            """
+            SELECT *
+            FROM tool_fingerprints
+            WHERE tool_name = ? AND quarantined = 1
+            ORDER BY quarantined_at DESC, server_id ASC
+            """,
+            (tool_name,),
         ).fetchone()
     return _tool_fingerprint_from_row(row) if row is not None else None
 

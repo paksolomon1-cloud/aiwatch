@@ -14,6 +14,7 @@ from app.detector import detect_alerts
 from app.storage import (
     clear_db,
     get_tool_fingerprint,
+    get_quarantined_tool_for_call,
     get_tool_history,
     get_session_alerts,
     get_session_events,
@@ -25,7 +26,10 @@ from app.storage import (
     list_audit_records,
     list_alerts,
     list_events,
+    list_quarantined_tools,
     list_tools,
+    quarantine_tools,
+    unquarantine_tools,
 )
 
 
@@ -44,11 +48,16 @@ def test_init_db_creates_tables(monkeypatch, tmp_path: Path) -> None:
         rows = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'"
         ).fetchall()
+        tool_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(tool_fingerprints)").fetchall()
+        }
 
     table_names = {row[0] for row in rows}
     assert {"events", "alerts", "tool_fingerprints", "tool_observations", "audit_records"}.issubset(
         table_names
     )
+    assert {"quarantined", "quarantine_reason", "quarantined_at"}.issubset(tool_columns)
 
 
 def test_insert_event_then_list_events_returns_event(monkeypatch, tmp_path: Path) -> None:
@@ -289,6 +298,48 @@ def test_ingest_event_persists_event_registry_history_and_alerts_for_mcp_tool(
     stored_alerts = list_alerts()
     assert len(stored_alerts) == 1
     assert stored_alerts[0].rule_id == "R-MCP-001"
+
+
+def test_quarantine_state_can_be_set_listed_matched_and_cleared(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    init_db()
+    clear_db()
+
+    event = poisoned_mcp_event(
+        agent_id="quarantine-mcp-client",
+        session_id="quarantine-session",
+        server_id="quarantine-notes-mcp",
+    )
+    ingest_event(event)
+    [tool] = list_tools()
+
+    quarantined_by_name = quarantine_tools(tool_name=tool.tool_name, reason="manual demo stop")
+
+    assert len(quarantined_by_name) == 1
+    assert quarantined_by_name[0].quarantined is True
+    assert quarantined_by_name[0].quarantine_reason == "manual demo stop"
+    assert quarantined_by_name[0].quarantined_at is not None
+    assert [item.fingerprint_id for item in list_quarantined_tools()] == [tool.fingerprint_id]
+
+    matched = get_quarantined_tool_for_call(
+        tool_name=tool.tool_name,
+        fingerprint_id=tool.fingerprint_id,
+    )
+    assert matched is not None
+    assert matched.fingerprint_id == tool.fingerprint_id
+
+    cleared_by_fingerprint = unquarantine_tools(fingerprint_id=tool.fingerprint_id)
+
+    assert [item.fingerprint_id for item in cleared_by_fingerprint] == [tool.fingerprint_id]
+    refreshed = get_tool_fingerprint(tool.fingerprint_id)
+    assert refreshed is not None
+    assert refreshed.quarantined is False
+    assert refreshed.quarantine_reason is None
+    assert refreshed.quarantined_at is None
+    assert list_quarantined_tools() == []
 
 
 def test_ingest_event_redacts_tool_call_secrets_before_sqlite_persistence(
