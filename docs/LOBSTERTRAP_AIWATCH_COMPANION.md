@@ -484,6 +484,36 @@ cd C:\Users\pakso\lobstertrap
 
 Then point an OpenAI-compatible client at `http://localhost:8080`. Do not claim this live proxy path worked unless a request through Lobster Trap to the backend succeeds.
 
+### 4. Live Local Audit Ingestion
+
+Use this helper to tail a local Lobster Trap JSONL audit file into AIWatch's local Unified Audit timeline. It does not require the Lobster Trap repo, does not start Lobster Trap, and does not shell out to Lobster Trap.
+
+Terminal 1:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330
+```
+
+Terminal 2:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
+Terminal 3:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm run dev
+```
+
+Open `http://localhost:5173/`.
+
+Lobster Trap prompt/response audit records are being ingested into AIWatch's local unified audit timeline. LLM/prompt traffic must be routed through Lobster Trap for live prompt/response audit records to appear. MCP traffic must be routed through the AIWatch wrapper or relay for MCP-layer observation and opt-in enforcement. AIWatch correlates the ingested Lobster Trap records and routed MCP records when correlation or session metadata lines up.
+
 ## Limits
 
 - AIWatch is not generic prompt monitoring.

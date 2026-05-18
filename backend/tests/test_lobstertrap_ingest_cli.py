@@ -101,6 +101,183 @@ def test_ingest_lobstertrap_audit_cli_rejects_nonlocal_backend_url(tmp_path: Pat
     assert "only posts to a local AIWatch backend URL" in captured.err
 
 
+def test_lobstertrap_live_ingest_posts_existing_records_before_follow_waits(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "lobstertrap-audit.jsonl"
+    audit_path.write_text(
+        "\n".join(
+            [
+                json.dumps({"request_id": "req-live-1", "action": "DENY", "rule_name": "block_prompt_injection"}),
+                json.dumps({"request_id": "req-live-2", "action": "ALLOW"}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    posted_records: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        posted_records.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        return {"accepted": 1, "rejected": 0, "stored_record_ids": [len(posted_records)]}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            str(audit_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+            "--follow",
+            "--max-records",
+            "2",
+            "--poll-interval-seconds",
+            "0.01",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert [record["body"]["request_id"] for record in posted_records] == ["req-live-1", "req-live-2"]
+    assert "Lobster Trap prompt/response audit records are being ingested" in captured.out
+    assert "Records ingested: 2" in captured.out
+    assert "Malformed/skipped records: 0" in captured.out
+    assert "Last decision/rule: ALLOW" in captured.out
+    assert "AIWatch monitors prompts" not in output
+    assert "blocks all exfiltration" not in output
+
+
+def test_lobstertrap_live_ingest_from_end_skips_existing_and_posts_appended(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "lobstertrap-audit.jsonl"
+    audit_path.write_text(
+        json.dumps({"request_id": "req-existing", "action": "DENY", "rule_name": "existing_rule"}) + "\n",
+        encoding="utf-8",
+    )
+    posted_records: list[dict[str, object]] = []
+    appended = False
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        posted_records.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        return {"accepted": 1, "rejected": 0, "stored_record_ids": [len(posted_records)]}
+
+    def fake_sleep(_seconds: float) -> None:
+        nonlocal appended
+        if not appended:
+            with audit_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps({"request_id": "req-appended", "action": "HUMAN_REVIEW"}) + "\n")
+            appended = True
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+    monkeypatch.setattr("app.cli.time.sleep", fake_sleep)
+
+    assert cli_main(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            str(audit_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+            "--follow",
+            "--from-end",
+            "--max-records",
+            "1",
+            "--poll-interval-seconds",
+            "0.01",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert [record["body"]["request_id"] for record in posted_records] == ["req-appended"]
+    assert "From end: enabled" in captured.out
+    assert "Records ingested: 1" in captured.out
+
+
+def test_lobstertrap_live_ingest_missing_file_errors_by_default(tmp_path: Path, capsys) -> None:
+    missing_path = tmp_path / "missing-lobstertrap-audit.jsonl"
+
+    assert cli_main(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            str(missing_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "Lobster Trap live audit ingestion step failed" in captured.err
+    assert "Lobster Trap fixture/audit file not found" in captured.err
+
+
+def test_lobstertrap_live_ingest_wait_for_file_reports_timeout(tmp_path: Path, capsys) -> None:
+    missing_path = tmp_path / "missing-lobstertrap-audit.jsonl"
+
+    assert cli_main(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            str(missing_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+            "--wait-for-file",
+            "--wait-timeout-seconds",
+            "0.001",
+            "--poll-interval-seconds",
+            "0.001",
+        ]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "timed out waiting for Lobster Trap audit file" in captured.err
+
+
+def test_lobstertrap_live_ingest_skips_malformed_lines_without_crashing(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "lobstertrap-audit.jsonl"
+    audit_path.write_text(
+        "{not-json\n"
+        + json.dumps({"request_id": "req-live-good", "action": "DENY", "rule_name": "block_prompt_injection"})
+        + "\n",
+        encoding="utf-8",
+    )
+    posted_records: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        posted_records.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        return {"accepted": 1, "rejected": 0, "stored_record_ids": [len(posted_records)]}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            str(audit_path),
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert [record["body"]["request_id"] for record in posted_records] == ["req-live-good"]
+    assert "Skipping malformed JSONL line 1" in captured.err
+    assert "Records ingested: 1" in captured.out
+    assert "Malformed/skipped records: 1 (malformed: 1; backend rejected: 0)" in captured.out
+    assert "Last decision/rule: DENY / block_prompt_injection" in captured.out
+
+
 def test_ingest_demo_lobstertrap_audit_cli_posts_bundled_fixture(monkeypatch, capsys) -> None:
     posted_records: list[dict[str, object]] = []
 

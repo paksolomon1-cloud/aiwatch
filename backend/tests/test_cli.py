@@ -47,11 +47,29 @@ def test_parser_recognizes_other_commands() -> None:
     assert parser.parse_args(["doctor"]).command == "doctor"
     assert parser.parse_args(["doctor", "--json"]).json is True
     assert parser.parse_args(["tools"]).command == "tools"
+    assert parser.parse_args(["quarantine-tool", "--tool-name", "list_notes"]).command == "quarantine-tool"
+    assert parser.parse_args(["unquarantine-tool", "--fingerprint", "abc123"]).command == "unquarantine-tool"
+    assert parser.parse_args(["quarantined-tools"]).command == "quarantined-tools"
     assert parser.parse_args(["alerts"]).command == "alerts"
     assert parser.parse_args(["enforcement-status"]).command == "enforcement-status"
     assert parser.parse_args(["export-veea-audit"]).command == "export-veea-audit"
     assert parser.parse_args(["export-veea-audit", "--out", "audit.jsonl"]).out == Path("audit.jsonl")
     assert parser.parse_args(["export-veea-audit", "--timeline"]).timeline is True
+    live_args = parser.parse_args(
+        [
+            "lobstertrap-live-ingest",
+            "--file",
+            "lobstertrap-audit.jsonl",
+            "--follow",
+            "--from-end",
+            "--max-records",
+            "1",
+        ]
+    )
+    assert live_args.command == "lobstertrap-live-ingest"
+    assert live_args.follow is True
+    assert live_args.from_end is True
+    assert live_args.max_records == 1
 
 
 def test_help_text_lists_supported_commands() -> None:
@@ -64,9 +82,13 @@ def test_help_text_lists_supported_commands() -> None:
     assert "eval" in help_text
     assert "doctor" in help_text
     assert "tools" in help_text
+    assert "quarantine-tool" in help_text
+    assert "unquarantine-tool" in help_text
+    assert "quarantined-tools" in help_text
     assert "alerts" in help_text
     assert "enforcement-status" in help_text
     assert "export-veea-audit" in help_text
+    assert "lobstertrap-live-ingest" in help_text
 
 
 def test_format_table_renders_headers_and_rows() -> None:
@@ -390,6 +412,101 @@ def test_enforcement_status_defaults_to_observe(monkeypatch, capsys) -> None:
     assert "local MCP relay/wrapper traffic only" in output
 
 
+def test_quarantine_tool_cli_posts_selector_and_prints_rows(monkeypatch, capsys) -> None:
+    requests: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        requests.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        return {
+            "status": "ok",
+            "updated": 1,
+            "tools": [
+                {
+                    "tool_name": "search_notes",
+                    "server_id": "notes-mcp",
+                    "fingerprint_id": "abcdef1234567890",
+                    "quarantine_reason": "demo stop",
+                    "quarantined_at": "2026-05-18T12:00:00Z",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(
+        [
+            "quarantine-tool",
+            "--tool-name",
+            "search_notes",
+            "--reason",
+            "demo stop",
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 0
+
+    output = capsys.readouterr().out
+    assert requests == [
+        {
+            "path": "/v1/tools/quarantine",
+            "backend_url": "http://127.0.0.1:7330",
+            "method": "POST",
+            "body": {"tool_name": "search_notes", "reason": "demo stop"},
+        }
+    ]
+    assert "Quarantined MCP tools: 1" in output
+    assert "search_notes" in output
+
+
+def test_unquarantine_and_quarantined_tools_cli_use_expected_endpoints(monkeypatch, capsys) -> None:
+    requests: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        requests.append({"path": path, "backend_url": backend_url, "method": method, "body": body})
+        if path == "/v1/tools/quarantined":
+            return [
+                {
+                    "tool_name": "search_notes",
+                    "server_id": "notes-mcp",
+                    "fingerprint_id": "abcdef1234567890",
+                    "quarantine_reason": "demo stop",
+                    "quarantined_at": "2026-05-18T12:00:00Z",
+                }
+            ]
+        return {"status": "ok", "updated": 1, "tools": []}
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["quarantined-tools", "--backend-url", "http://127.0.0.1:7330"]) == 0
+    assert cli_main(
+        [
+            "unquarantine-tool",
+            "--fingerprint",
+            "abcdef1234567890",
+            "--backend-url",
+            "http://127.0.0.1:7330",
+        ]
+    ) == 0
+
+    output = capsys.readouterr().out
+    assert requests == [
+        {
+            "path": "/v1/tools/quarantined",
+            "backend_url": "http://127.0.0.1:7330",
+            "method": "GET",
+            "body": None,
+        },
+        {
+            "path": "/v1/tools/unquarantine",
+            "backend_url": "http://127.0.0.1:7330",
+            "method": "POST",
+            "body": {"fingerprint_id": "abcdef1234567890"},
+        },
+    ]
+    assert "search_notes" in output
+    assert "Unquarantined MCP tools: 1" in output
+
+
 def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
     root_dir = Path(__file__).resolve().parents[2]
     docs = [
@@ -402,7 +519,12 @@ def test_enforcement_docs_do_not_add_forbidden_product_claims() -> None:
         line
         for path in docs
         for line in path.read_text(encoding="utf-8").splitlines()
-        if "enforcement" in line.lower() or "deny mode" in line.lower() or "R-MCP-005" in line
+        if (
+            "enforcement" in line.lower()
+            or "deny mode" in line.lower()
+            or "quarantine" in line.lower()
+            or "R-MCP-005" in line
+        )
     )
     forbidden_phrases = [
         "live Veea platform integration",
