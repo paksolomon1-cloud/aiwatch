@@ -1126,7 +1126,7 @@ function App() {
 
           {auditTimeline.length === 0 ? (
             <p className="empty-state">
-              No unified audit records yet. Seed AIWatch MCP events or ingest a Lobster Trap audit JSONL file.
+              No unified audit records yet. Ingest a Lobster Trap JSONL audit file or generate AIWatch MCP activity to populate this local timeline.
             </p>
           ) : (
             <div className="table-scroll">
