@@ -144,16 +144,18 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
             client_events,
             enforcement_mode=config.enforcement_mode,
         )
-        if enforcement_decision.should_deny:
+        if enforcement_decision.should_annotate:
             client_events = [
                 annotate_enforcement_decision(event, enforcement_decision)
                 for event in client_events
             ]
+        if enforcement_decision.should_deny:
             _post_observed_events(self.server, client_events)
             self._send_mcp_denial_response(client_frame, enforcement_decision)
+            denial_label = enforcement_decision.rule_id or enforcement_decision.reason or "manual_enforcement"
             _stderr(
                 self.server,
-                f"[aiwatch-http-relay] denied tools/call rule={enforcement_decision.rule_id}",
+                f"[aiwatch-http-relay] denied tools/call rule={denial_label}",
             )
             return
 
@@ -196,18 +198,27 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _send_mcp_denial_response(self, frame: dict[str, Any], decision: Any) -> None:
+        denial_label = decision.rule_id or decision.reason or "manual_enforcement"
+        data = {
+            "enforcement_mode": decision.enforcement_mode,
+            "reason": decision.reason,
+        }
+        if decision.rule_id is not None:
+            data["rule_id"] = decision.rule_id
+        if decision.tool_name is not None:
+            data["tool_name"] = decision.tool_name
+        if decision.tool_fingerprint is not None:
+            data["tool_fingerprint"] = decision.tool_fingerprint
+        if decision.quarantine_reason is not None:
+            data["quarantine_reason"] = decision.quarantine_reason
         payload = json.dumps(
             {
                 "jsonrpc": "2.0",
                 "id": frame.get("id"),
                 "error": {
                     "code": -32000,
-                    "message": f"AIWatch denied routed MCP tools/call: {decision.rule_id}.",
-                    "data": {
-                        "enforcement_mode": decision.enforcement_mode,
-                        "rule_id": decision.rule_id,
-                        "reason": decision.reason,
-                    },
+                    "message": f"AIWatch denied routed MCP tools/call: {denial_label}.",
+                    "data": data,
                 },
             }
         ).encode("utf-8")

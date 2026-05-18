@@ -125,11 +125,19 @@ class ToolFingerprint(BaseModel):
     observation_count: int
     drift_count: int = 0
     latest_event_id: str | None = None
+    quarantined: bool = False
+    quarantine_reason: str | None = None
+    quarantined_at: datetime | None = None
 
     @field_validator("first_seen", "last_seen", mode="after")
     @classmethod
     def _normalize_tool_timestamps(cls, value: datetime) -> datetime:
         return _normalize_to_utc(value)
+
+    @field_validator("quarantined_at", mode="after")
+    @classmethod
+    def _normalize_quarantine_timestamp(cls, value: datetime | None) -> datetime | None:
+        return _normalize_to_utc(value) if value is not None else None
 
 
 class ToolObservation(BaseModel):

@@ -10,6 +10,8 @@ from pathlib import Path
 import scripts.aiwatch_stdio_tap as tap_module
 from app.frame_log import append_frame_log, build_frame_log_entry
 from app.mcp_normalizer import normalize_tools_list_frame
+from app.schemas import ActionType, AgentEvent, Source
+from app.storage import clear_db, init_db, ingest_event, quarantine_tools
 from scripts.aiwatch_stdio_tap import build_parser as build_tap_parser, run_tap
 from scripts.fake_mcp_server import SERVER_NAME, handle_frame
 from scripts.realistic_mcp_fixture_server import (
@@ -486,6 +488,59 @@ def test_stdio_deny_mode_blocks_r_mcp_005_without_writing_upstream(monkeypatch, 
     assert raw_secret not in stdout_text
     assert raw_secret not in stderr_text
     assert "[aiwatch] denied tools/call rule=R-MCP-005" in stderr_text
+
+
+def test_stdio_deny_mode_blocks_manually_quarantined_tool(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AIWATCH_DB_PATH", str(tmp_path / "stdio-quarantine.db"))
+    init_db()
+    clear_db()
+    ingest_event(
+        AgentEvent(
+            source=Source.MCP,
+            agent_id="mcp-client",
+            session_id="stdio-quarantine-session",
+            action_type=ActionType.TOOL_REGISTER,
+            action_params={
+                "server_id": "fake-notes-mcp",
+                "tool_name": "export_notes",
+                "description": "Exports notes.",
+            },
+        )
+    )
+    [quarantined_tool] = quarantine_tools(tool_name="export_notes", reason="manual demo stop")
+    posted_events: list[dict[str, object]] = []
+
+    def fake_post_event(_backend_url: str, event_payload: dict[str, object]) -> dict[str, object]:
+        posted_events.append(event_payload)
+        return {"alerts_created": 0}
+
+    client_line = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "export_notes", "arguments": {"format": "json"}},
+        }
+    )
+
+    result, stdout_text, _stderr_text, captured = _run_tap_with_scripted_server(
+        monkeypatch,
+        tmp_path,
+        client_lines=[client_line],
+        server_batches=[[]],
+        post_event=fake_post_event,
+        enforcement_mode="deny",
+    )
+
+    upstream_stdin = captured["stdin"]
+    response = json.loads(stdout_text)
+    assert result == 0
+    assert isinstance(upstream_stdin, _RecordingStdin)
+    assert upstream_stdin.writes == []
+    assert response["error"]["data"]["reason"] == "tool_quarantined"
+    assert response["error"]["data"]["tool_fingerprint"] == quarantined_tool.fingerprint_id
+    assert posted_events[0]["action_params"]["enforcement"]["reason"] == "tool_quarantined"
+    assert posted_events[0]["action_params"]["enforcement"]["quarantine_reason"] == "manual demo stop"
 
 
 def test_server_to_client_raw_frame_log_redacts_echoed_credential_values(monkeypatch, tmp_path: Path) -> None:

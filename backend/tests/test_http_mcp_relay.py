@@ -13,6 +13,8 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
+from app.schemas import ActionType, AgentEvent, Source
+from app.storage import clear_db, init_db, ingest_event, quarantine_tools
 from scripts import aiwatch_http_mcp_relay as relay_module
 
 
@@ -68,6 +70,28 @@ def _get(url: str) -> tuple[int, bytes]:
 
 def _json_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload).encode("utf-8")
+
+
+def _configure_quarantine_db(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("AIWATCH_DB_PATH", str(tmp_path / "aiwatch-relay-quarantine.db"))
+    init_db()
+    clear_db()
+
+
+def _register_tool(*, server_id: str = "fixture-http-notes-mcp", tool_name: str = "list_notes") -> str:
+    event = AgentEvent(
+        source=Source.MCP,
+        agent_id="mcp-client",
+        session_id="relay-quarantine-session",
+        action_type=ActionType.TOOL_REGISTER,
+        action_params={
+            "server_id": server_id,
+            "tool_name": tool_name,
+            "description": "Lists local fixture notes.",
+        },
+    )
+    ingest_event(event)
+    return tool_name
 
 
 @contextmanager
@@ -479,7 +503,99 @@ def test_observe_mode_does_not_block_r_mcp_005() -> None:
     assert "credential_findings" in backend_events[0]["action_params"]
 
 
-def test_deny_mode_allows_safe_tools_call() -> None:
+def test_observe_mode_notes_quarantined_tool_but_still_forwards(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    _configure_quarantine_db(monkeypatch, tmp_path)
+    tool_name = _register_tool()
+    [quarantined_tool] = quarantine_tools(tool_name=tool_name, reason="manual demo stop")
+
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(
+                upstream_url=upstream_url,
+                backend_url=backend_url,
+                enforcement_mode="observe",
+            ) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"query": "release notes"}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    event = backend_events[0]
+    assert status == 200
+    assert json.loads(body)["result"]["isError"] is False
+    assert len(upstream_calls) == 1
+    assert "enforcement" not in event["action_params"]
+    assert event["action_params"]["quarantine"] == {
+        "quarantined": True,
+        "reason": "tool_quarantined",
+        "enforcement_mode": "observe",
+        "tool_name": "list_notes",
+        "tool_fingerprint": quarantined_tool.fingerprint_id,
+        "quarantine_reason": "manual demo stop",
+    }
+
+
+def test_deny_mode_blocks_quarantined_tool_before_upstream_forwarding(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    _configure_quarantine_db(monkeypatch, tmp_path)
+    tool_name = _register_tool()
+    [quarantined_tool] = quarantine_tools(tool_name=tool_name, reason="manual demo stop")
+
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(
+                upstream_url=upstream_url,
+                backend_url=backend_url,
+                enforcement_mode="deny",
+            ) as (relay_url, _stderr):
+                status, body, _headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {"name": "list_notes", "arguments": {"query": "release notes"}},
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 1)
+
+    response = json.loads(body)
+    event = backend_events[0]
+    assert status == 200
+    assert response["error"]["code"] == -32000
+    assert response["error"]["data"]["reason"] == "tool_quarantined"
+    assert response["error"]["data"]["enforcement_mode"] == "deny"
+    assert response["error"]["data"]["tool_name"] == "list_notes"
+    assert response["error"]["data"]["tool_fingerprint"] == quarantined_tool.fingerprint_id
+    assert upstream_calls == []
+    assert event["action_params"]["enforcement"] == {
+        "action": "deny",
+        "enforcement_mode": "deny",
+        "reason": "tool_quarantined",
+        "tool_name": "list_notes",
+        "tool_fingerprint": quarantined_tool.fingerprint_id,
+        "quarantine_reason": "manual demo stop",
+    }
+    assert event["action_params"]["quarantine"]["quarantined"] is True
+
+
+def test_deny_mode_allows_safe_tools_call(monkeypatch, tmp_path) -> None:
+    _configure_quarantine_db(monkeypatch, tmp_path)
     with _backend_server() as (backend_url, backend_events):
         with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
             with _relay_server(

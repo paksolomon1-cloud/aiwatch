@@ -152,23 +152,39 @@ For a deterministic demo fixture, use the unified helper instead of manually ord
 py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
 ```
 
-To ingest a real local Lobster Trap audit file into the local AIWatch backend and show it in the dashboard's Unified Audit tab:
+For live local Lobster Trap audit ingestion into the dashboard's Unified Audit tab, use the safer live helper:
+
+Terminal 1:
 
 ```powershell
-py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330
 ```
 
-Optional follow mode for appended JSONL lines:
+Terminal 2:
 
 ```powershell
-py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
 ```
+
+Terminal 3:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm run dev
+```
+
+Open `http://localhost:5173/`.
 
 Say:
 
 ```text
-This is local live audit ingestion. It does not make AIWatch inspect prompts directly, does not make Lobster Trap inspect MCP traffic, and does not use TerraFabric infrastructure.
+Lobster Trap prompt/response audit records are being ingested into AIWatch's local unified audit timeline. LLM/prompt traffic must be routed through Lobster Trap for live prompt/response audit records to appear. MCP traffic must be routed through the AIWatch wrapper or relay for MCP-layer observation and opt-in enforcement.
 ```
+
+AIWatch correlates the ingested Lobster Trap records and routed MCP records when correlation or session metadata lines up. The older `ingest-lobstertrap-audit --file ...` command remains available for one-shot local JSONL import, but use `lobstertrap-live-ingest --follow` for the live combined demo.
 
 The dashboard's Unified Audit tab also reads `GET /v1/audit/summary` for local risk counts and groups records by local session/request metadata when present. If the seeded AIWatch MCP records and bundled Lobster Trap sample share a session ID, the tab labels that group as local cross-layer audit correlation.
 
@@ -209,6 +225,29 @@ Safe wording:
 
 ```text
 AIWatch can optionally deny selected routed MCP tool calls when deterministic high-confidence rules match. The current deny MVP starts with R-MCP-005 and requires AIWATCH_ENFORCEMENT_MODE=deny on the local relay or wrapper process.
+```
+
+### Optional Manual Quarantine Demo
+
+Use this only after the extended demo has registered tools. Manual quarantine affects future routed MCP calls to the selected local registry tool when enforcement mode is enabled.
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed --extended --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantine-tool --tool-name search_notes --reason "manual demo stop" --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+```
+
+Then start the local MCP relay or stdio wrapper with:
+
+```powershell
+$env:AIWATCH_ENFORCEMENT_MODE="deny"
+```
+
+Safe wording:
+
+```text
+AIWatch can optionally deny future routed MCP calls to manually quarantined tools when traffic goes through the AIWatch local MCP relay/wrapper and enforcement mode is enabled.
 ```
 
 ### Stdio Fixture Smoke

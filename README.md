@@ -36,6 +36,14 @@ $env:AIWATCH_ENFORCEMENT_MODE="deny"    # opt-in deny mode
 
 The MVP deny rule is limited to `R-MCP-005` for credential-shaped MCP `tools/call` parameters. In `observe` mode, AIWatch preserves the existing behavior: routed events are observed, redacted, stored, and alerted without blocking the upstream MCP call. In `deny` mode, matching `R-MCP-005` routed tool calls are not forwarded to the upstream MCP server; AIWatch returns an MCP-compatible JSON-RPC error and records the deny decision in the local event/alert metadata.
 
+Manual quarantine is also available for registered MCP tools. AIWatch can optionally deny future routed MCP calls to manually quarantined tools when traffic goes through the AIWatch local MCP relay/wrapper and enforcement mode is enabled.
+
+```powershell
+py -3.12 scripts\aiwatch.py quarantine-tool --tool-name search_notes --reason "manual demo stop" --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py unquarantine-tool --tool-name search_notes --backend-url http://127.0.0.1:7330
+```
+
 Check the local CLI process setting:
 
 ```powershell
@@ -56,6 +64,7 @@ py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:73
 - experimental local HTTP MCP relay at `backend/scripts/aiwatch_http_mcp_relay.py`
 - `aiwatch doctor` config health check for local `.mcp.json` and `.cursor/mcp.json`
 - opt-in deny mode for selected routed MCP tool calls
+- manual quarantine state for registered MCP tools
 - deterministic local eval harness
 
 Real ingestion paths use the canonical backend ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
@@ -159,6 +168,42 @@ py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:73
 
 To enable deny mode for a local relay/wrapper process, set `AIWATCH_ENFORCEMENT_MODE=deny` before starting that process. Leave it unset or set it to `observe` for alert-only behavior.
 
+Manual quarantine CLI:
+
+```powershell
+py -3.12 scripts\aiwatch.py quarantine-tool --tool-name search_notes --reason "manual demo stop" --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py unquarantine-tool --tool-name search_notes --backend-url http://127.0.0.1:7330
+```
+
+Run live local Lobster Trap audit ingestion for the Unified Audit tab:
+
+Terminal 1:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330
+```
+
+Terminal 2:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
+Terminal 3:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm run dev
+```
+
+Open `http://localhost:5173/`.
+
+Lobster Trap prompt/response audit records are ingested into AIWatch's local unified audit timeline. LLM/prompt traffic must be routed through Lobster Trap for live prompt/response audit records to appear. MCP traffic must be routed through the AIWatch wrapper/relay for MCP-layer observation and opt-in enforcement. AIWatch correlates ingested Lobster Trap records and routed MCP records when correlation or session metadata lines up.
+
 Run the config health check from the repo root:
 
 ```powershell
@@ -184,6 +229,7 @@ py -3.12 eval\run_eval.py
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude Code internals, Cursor internals, or arbitrary local process activity.
 - AIWatch does not guarantee prevention of all exfiltration.
 - Deny mode is opt-in and limited to selected routed MCP tool calls; current deny coverage starts with `R-MCP-005`.
+- Manual quarantine only affects future routed MCP calls through the local relay/wrapper when enforcement mode is enabled.
 - AIWatch does not implement production auth, HMAC logs, semantic embeddings, full Streamable HTTP, SSE, GET stream handling, a generic HTTP proxy, production-ready proxying, SIEM/exporters, ML detection, or Cursor runtime support.
 - `aiwatch doctor` checks config shape only; it cannot prove a client loaded that config or prevent config tampering.
 
