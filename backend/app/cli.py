@@ -10,8 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from app.storage import clear_db, init_db, list_alerts as list_local_alerts
-from app.veea_audit import build_veea_audit_envelopes, render_veea_audit_jsonl, write_veea_audit_jsonl
+from app.storage import clear_db, init_db, list_alerts as list_local_alerts, list_events as list_local_events
+from app.veea_audit import (
+    build_veea_audit_envelopes,
+    build_veea_audit_timeline,
+    render_veea_audit_jsonl,
+    write_veea_audit_jsonl,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_BACKEND_URL = "http://127.0.0.1:7330"
@@ -332,9 +337,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     export_parser = subparsers.add_parser(
         "export-veea-audit",
-        help="Export stored MCP alerts as Veea companion audit JSONL.",
+        help="Export stored MCP alerts or a Veea companion audit timeline as JSONL.",
     )
     export_parser.add_argument("--out", type=Path, help="Write JSONL to this file instead of stdout.")
+    export_parser.add_argument(
+        "--timeline",
+        action="store_true",
+        help="Include stored MCP observation events with MCP alerts in timestamp order.",
+    )
     export_parser.set_defaults(handler=handle_export_veea_audit)
 
     return parser
@@ -459,16 +469,21 @@ def handle_alerts(args: argparse.Namespace) -> int:
 
 def handle_export_veea_audit(args: argparse.Namespace) -> int:
     init_db()
-    envelopes = build_veea_audit_envelopes(list_local_alerts())
+    if args.timeline:
+        envelopes = build_veea_audit_timeline(list_local_events(), list_local_alerts())
+        record_label = "AIWatch MCP audit timeline records"
+    else:
+        envelopes = build_veea_audit_envelopes(list_local_alerts())
+        record_label = "AIWatch MCP alert audit envelopes"
 
     if args.out:
         output_path = Path(args.out)
         write_veea_audit_jsonl(envelopes, output_path)
-        print(f"Exported {len(envelopes)} AIWatch MCP alert audit envelopes to {output_path}.")
+        print(f"Exported {len(envelopes)} {record_label} to {output_path}.")
         return 0
 
     sys.stdout.write(render_veea_audit_jsonl(envelopes))
-    print(f"Exported {len(envelopes)} AIWatch MCP alert audit envelopes to stdout.", file=sys.stderr)
+    print(f"Exported {len(envelopes)} {record_label} to stdout.", file=sys.stderr)
     return 0
 
 

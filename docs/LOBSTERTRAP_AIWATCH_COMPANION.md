@@ -6,7 +6,7 @@ It does not describe a verified live event bridge between the two projects. The 
 
 - Lobster Trap covers the conversation/model layer for OpenAI-compatible LLM traffic.
 - AIWatch covers the routed MCP tool layer.
-- AIWatch can export stored MCP-layer alerts as a Veea-style companion audit JSONL artifact.
+- AIWatch can export stored MCP-layer alerts, or an MCP observation-plus-alert timeline, as a Veea-style companion audit JSONL artifact.
 
 ## Baseline vs Extension
 
@@ -80,7 +80,7 @@ This is a companion discovery path, not a verified combined runtime integration.
 - AIWatch does not send events to Lobster Trap.
 - Lobster Trap does not feed events into AIWatch.
 - There is no shared dashboard or shared event bus yet.
-- AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts.
+- AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts and MCP-layer timeline records.
 - AIWatch does not implement Lobster Trap prompt/response inspection.
 - Lobster Trap should not be described as covering MCP tool traffic unless that is separately implemented and verified.
 - Lobster Trap `serve` mode was not verified locally because no OpenAI-compatible backend was listening on `localhost:11434`.
@@ -90,7 +90,7 @@ This is a companion discovery path, not a verified combined runtime integration.
 
 - No AIWatch-to-Lobster-Trap event forwarding exists.
 - No Lobster-Trap-to-AIWatch ingestion exists.
-- No shared policy engine or shared audit timeline exists.
+- No shared policy engine or live shared audit timeline exists.
 - No shared dashboard panel exists.
 - Lobster Trap was not verified as an MCP traffic observer.
 - AIWatch was not verified as a prompt/response proxy.
@@ -165,6 +165,69 @@ Limitations:
 - No Lobster Trap ingestion API compatibility is claimed or verified.
 - The export includes AIWatch MCP-layer alerts only; it is not prompt/response monitoring.
 - Evidence uses AIWatch's stored sanitized/redacted alert data plus export-level redaction safety.
+
+## Phase 1 Interop: AIWatch Veea Audit Timeline Export
+
+AIWatch can also export a local audit timeline that combines MCP observation events and AIWatch MCP security alerts. This keeps the same export-only boundary while making the artifact more useful for rehearsal, offline review, and future unified audit design.
+
+Alerts-only export remains the default:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-alerts.jsonl
+```
+
+Timeline export adds stored MCP observations and orders all records by timestamp:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py export-veea-audit --timeline --out veea-aiwatch-timeline.jsonl
+Get-Content .\veea-aiwatch-timeline.jsonl -TotalCount 10
+```
+
+MCP observation records use the same schema name with a sibling event type:
+
+```json
+{
+  "schema": "veea.aiwatch.audit.v1",
+  "source": "aiwatch",
+  "layer": "mcp_tool",
+  "event_type": "mcp_observation",
+  "observation_type": "tool_call",
+  "timestamp": "2026-05-17T00:00:00Z",
+  "server_id": "notes-mcp",
+  "tool_name": "export_notes",
+  "session_id": "demo-session",
+  "agent_id": "mcp-client",
+  "redacted": true,
+  "evidence": {
+    "action_params": {
+      "server_id": "notes-mcp",
+      "tool_name": "export_notes",
+      "arguments": {
+        "api_key": "[REDACTED:OPENAI_KEY]"
+      }
+    },
+    "raw": null,
+    "intent_text": null,
+    "parent_event_id": null
+  },
+  "aiwatch": {
+    "event_id": "event-id",
+    "source": "mcp",
+    "transport": "routed_mcp_unspecified",
+    "detector": null
+  }
+}
+```
+
+Phase 1 limits:
+
+- The timeline is still an export artifact, not live AIWatch-to-Lobster-Trap forwarding.
+- It does not require Lobster Trap, Go, or the Lobster Trap binary.
+- It does not write to a Lobster Trap ingestion API, and no Lobster Trap ingestion compatibility is claimed.
+- Timeline records include AIWatch MCP-layer observations and alerts only; they are not prompt/response traffic.
+- Stored sanitized event data is used where available, with export-level redaction as a safety net.
 
 ## Windows Setup Notes Verified Locally
 

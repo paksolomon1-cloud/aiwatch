@@ -14,7 +14,7 @@ No future task should broaden AIWatch's claim without first updating this spec.
   - initial demo-ready checkpoint
   - generated artifact ignore cleanup
   - UI/layout/R-MCP-005 collapse/root wording fixes
-- `pytest`: `135 passed`
+- `pytest`: `141 passed`
 - `eval`: `39/39`
 - Frontend build passes.
 - Fixture stdio smoke works.
@@ -30,7 +30,7 @@ No future task should broaden AIWatch's claim without first updating this spec.
 - `R-MCP-005` redaction regressions cover tested backend/API/CLI surfaces.
 - `aiwatch doctor` and `aiwatch doctor --json` exist.
 - Root API message now uses canonical MCP-first wording.
-- Dashboard proof points show `135`, `39/39`, `5/7`, `8/10`.
+- Dashboard proof points show `141`, `39/39`, `5/7`, `8/10`.
 - Local HTTP MCP relay Phase A POST JSON subset smoke works.
 - Local HTTP MCP relay smoke observed `echo_note` and `list_notes` under `fixture-http-notes-mcp` with `No alerts found.`
 - `R-MCP-005` action params are collapsed by default in session replay.
@@ -289,7 +289,7 @@ Required redaction statement:
 
 | Proof point | Current result |
 | --- | --- |
-| Backend tests | `135 passed` |
+| Backend tests | `141 passed` |
 | Eval | `39/39` |
 | Fixture stdio smoke | Works |
 | Claude Code stdio MCP smoke | Works |

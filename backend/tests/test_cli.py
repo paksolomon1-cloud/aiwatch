@@ -39,6 +39,7 @@ def test_parser_recognizes_other_commands() -> None:
     assert parser.parse_args(["alerts"]).command == "alerts"
     assert parser.parse_args(["export-veea-audit"]).command == "export-veea-audit"
     assert parser.parse_args(["export-veea-audit", "--out", "audit.jsonl"]).out == Path("audit.jsonl")
+    assert parser.parse_args(["export-veea-audit", "--timeline"]).timeline is True
 
 
 def test_help_text_lists_supported_commands() -> None:

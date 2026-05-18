@@ -74,7 +74,7 @@ R-MCP-005 is deterministic credential-shaped value detection in MCP tools/call p
 Say:
 
 ```text
-The current proof set is 135 backend tests passing, 39/39 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
+The current proof set is 141 backend tests passing, 39/39 eval passing, a working stdio wrapper smoke, two real no-token MCP package smokes, and a local HTTP POST JSON MCP relay Phase A smoke. This is a narrow proof of routed MCP traffic visibility, not generic client or laptop monitoring.
 ```
 
 ## Rehearsal Proof Commands
@@ -108,18 +108,20 @@ Expected:
 
 Then run the normal AIWatch dashboard flow below: seed the core demo, seed the extended MCP registry demo, trigger `R-MCP-005`, and show MCP tool definitions, drift, shadowing, and redacted credential-shaped MCP tool-call evidence.
 
-After AIWatch has alerts in the local backend database, export the MCP-layer alerts as the Phase 0 interop artifact:
+After AIWatch has alerts in the local backend database, export the MCP-layer alerts as the Phase 0 interop artifact and the MCP observation-plus-alert timeline as the Phase 1 interop artifact:
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
-py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl
-Get-Content .\veea-aiwatch-audit.jsonl -TotalCount 5
+py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-alerts.jsonl
+py -3.12 scripts\aiwatch.py export-veea-audit --timeline --out veea-aiwatch-timeline.jsonl
+Get-Content .\veea-aiwatch-alerts.jsonl -TotalCount 5
+Get-Content .\veea-aiwatch-timeline.jsonl -TotalCount 10
 ```
 
 Say:
 
 ```text
-This JSONL file is the first technical bridge: AIWatch exports MCP-layer alerts into a Veea-style audit envelope. It is an export artifact, not live forwarding to Lobster Trap and not a shared runtime pipeline yet.
+These JSONL files are the first technical bridge: AIWatch exports MCP-layer alerts and an MCP observation timeline into Veea-style audit envelopes. They are export artifacts, not live forwarding to Lobster Trap and not a shared runtime pipeline yet.
 ```
 
 Say:
@@ -140,7 +142,7 @@ py -3.12 eval\run_eval.py
 
 Expected:
 
-- `135 passed`
+- `141 passed`
 - eval total cases: `39`
 - eval passed cases: `39`
 - false positives: none

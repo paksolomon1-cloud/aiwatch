@@ -10,7 +10,7 @@ Veea is the broader runtime-security vision for tool-using AI agents. AIWatch is
 
 Veea Lobster Trap is the baseline prompt/response-layer companion for OpenAI-compatible LLM traffic. AIWatch adds MCP tool-layer visibility alongside Lobster Trap. Together they demonstrate a side-by-side layered runtime-security story; they are not a fused runtime pipeline unless a bridge is implemented and verified.
 
-Phase 0 interop is export-only: `py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl` writes stored AIWatch MCP alerts as JSONL in a Veea-style companion audit envelope. It does not forward events to Lobster Trap or require Lobster Trap to be running.
+Phase 0/1 interop is export-only: `py -3.12 scripts\aiwatch.py export-veea-audit --out veea-aiwatch-audit.jsonl` writes stored AIWatch MCP alerts as JSONL, and `--timeline` adds stored MCP observation events for a local Veea-style audit timeline. It does not forward events to Lobster Trap or require Lobster Trap to be running.
 
 Future Veea directions may include additional adapters beyond MCP, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility. Those are future product directions, not current AIWatch capabilities.
 
@@ -31,7 +31,7 @@ The repo still contains legacy/demo coding-agent rules for seeded demos and eval
 - tool fingerprinting
 - deterministic alert engine
 - CLI wrapper at `backend/scripts/aiwatch.py`
-- Veea-style companion audit JSONL export for stored MCP alerts
+- Veea-style companion audit JSONL export for stored MCP alerts and local MCP audit timelines
 - React dashboard
 - local stdio MCP wrapper/tap path at `backend/scripts/aiwatch_stdio_tap.py`
 - experimental local HTTP MCP relay at `backend/scripts/aiwatch_http_mcp_relay.py`
@@ -45,7 +45,7 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 - Claude Code local stdio MCP wrapper runtime smoke succeeded on Windows.
 - AIWatch observed Claude Code-routed MCP traffic when Claude Code launched an MCP server through the AIWatch stdio wrapper.
 - Real MCP package smokes passed for `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
-- Tests recently passed: `135`.
+- Tests recently passed: `141`.
 - Eval recently passed: `39/39`.
 - Local HTTP POST JSON MCP relay smoke passed for `fixture-http-notes-mcp`.
 - Core seed expected count: `5 events / 7 alerts`.
