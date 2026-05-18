@@ -340,6 +340,10 @@
   grid-column: span 4;
 }
 
+.enforcement-panel {
+  grid-column: span 8;
+}
+
 .recent-alerts-panel {
   grid-column: span 8;
 }
@@ -510,6 +514,104 @@
   display: block;
   margin-top: 0.75rem;
   font-size: 1.9rem;
+}
+
+.denial-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.denial-card {
+  min-width: 0;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 159, 67, 0.28);
+  background: rgba(36, 19, 9, 0.48);
+  padding: 0.85rem;
+  box-shadow: inset 3px 0 0 rgba(255, 159, 67, 0.68);
+}
+
+.denial-card-header,
+.incident-heading-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.denial-card-header {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.denial-pill {
+  border-color: rgba(255, 93, 93, 0.34);
+  background: rgba(255, 93, 93, 0.11);
+  color: #ffd2d2;
+}
+
+.denial-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.72rem;
+}
+
+.denial-meta-grid div {
+  min-width: 0;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(30, 49, 71, 0.82);
+  background: rgba(8, 15, 26, 0.62);
+  padding: 0.58rem;
+}
+
+.denial-meta-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.denial-meta-grid strong {
+  display: block;
+  margin-top: 0.32rem;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.denial-reason {
+  margin: 0.75rem 0 0;
+  color: #ffe28a;
+  overflow-wrap: anywhere;
+}
+
+.denial-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.denial-empty code {
+  display: block;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(30, 49, 71, 0.85);
+  background: rgba(5, 10, 18, 0.78);
+  color: #d9f6ff;
+  padding: 0.48rem 0.55rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.upstream-false {
+  color: var(--low);
+}
+
+.upstream-true {
+  color: #ffd2d2;
 }
 
 .severity-badge,
@@ -1134,6 +1236,20 @@ input {
   box-shadow: inset 3px 0 0 rgba(255, 159, 67, 0.72);
 }
 
+.incident-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 159, 67, 0.3);
+  background: rgba(255, 159, 67, 0.12);
+  color: #ffbd86;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .incident-record {
   display: grid;
   grid-template-columns: max-content minmax(8rem, 0.38fr) max-content minmax(0, 1fr);
@@ -1411,6 +1527,7 @@ pre {
   .proof-panel,
   .guide-panel,
   .severity-panel,
+  .enforcement-panel,
   .recent-alerts-panel,
   .session-panel,
   .registry-panel {
@@ -1421,6 +1538,8 @@ pre {
   .detail-grid,
   .severity-grid,
   .proof-grid,
+  .denial-list,
+  .denial-meta-grid,
   .coverage-grid,
   .audit-integration-strip,
   .audit-source-layer-grid,

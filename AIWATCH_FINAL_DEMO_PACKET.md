@@ -119,7 +119,7 @@ cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py demo-blocked-mcp-attack --backend-url http://127.0.0.1:7330
 ```
 
-Expected result: JSON output shows `action=deny`, `enforcement_mode=deny`, `rule_id=R-MCP-005`, and `upstream_contacted=false`. In deny mode, AIWatch stops selected high-risk routed MCP calls before forwarding.
+Expected result: JSON output shows `action=deny`, `enforcement_mode=deny`, `rule_id=R-MCP-005`, and `upstream_contacted=false`. Refresh the dashboard and open `Overview`; the `Enforcement Evidence` card shows the stored denied MCP event. In deny mode, AIWatch stops selected high-risk routed MCP calls before forwarding.
 
 Prompt-layer correlated attack:
 
@@ -128,7 +128,7 @@ cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
 ```
 
-Expected result in `Unified Audit`: the bundled Lobster Trap `DENY` record with `correlation_id=demo-poisoned-mcp` groups with related AIWatch MCP activity and appears as elevated cross-layer risk. Lobster Trap provides the prompt/response decision; AIWatch ingests it locally and correlates it with routed MCP activity.
+Expected result in `Unified Audit`: the bundled Lobster Trap `DENY` record with `correlation_id=demo-poisoned-mcp` groups with related AIWatch MCP activity and appears as elevated cross-layer risk. The grouped incident card shows a `Lobster Trap DENY + AIWatch MCP` label. Lobster Trap provides the prompt/response decision; AIWatch ingests it locally and correlates it with routed MCP activity.
 
 ### Optional live Lobster Trap prompt-layer ingest
 

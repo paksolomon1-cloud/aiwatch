@@ -46,7 +46,19 @@ interface AuditIncidentGroup {
   key: string
   label: 'Cross-layer activity' | 'Elevated cross-layer risk'
   latestAt: string | null
+  riskActions: string[]
   records: AuditTimelineRecord[]
+}
+
+interface DeniedMcpCallEvidence {
+  event: AgentEvent
+  action: string
+  enforcementMode: string | null
+  ruleId: string | null
+  reason: string | null
+  toolName: string
+  serverId: string
+  upstreamContacted: boolean | null
 }
 
 interface ReplayLoadOptions {
@@ -55,6 +67,8 @@ interface ReplayLoadOptions {
 
 const DEMO_UNIFIED_SEED_COMMAND =
   'py -3.12 scripts\\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330'
+const DEMO_BLOCKED_MCP_ATTACK_COMMAND =
+  'py -3.12 scripts\\aiwatch.py demo-blocked-mcp-attack --backend-url http://127.0.0.1:7330'
 
 const severityOrder: Record<Severity, number> = {
   critical: 4,
@@ -154,6 +168,107 @@ function getAuditActionText(record: AuditTimelineRecord): string {
   return record.action ?? record.decision ?? 'n/a'
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getStringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function getBooleanField(record: Record<string, unknown>, key: string): boolean | null {
+  const value = record[key]
+  return typeof value === 'boolean' ? value : null
+}
+
+function getToolNameFromActionParams(actionParams: Record<string, unknown>): string | null {
+  const directToolName = getStringField(actionParams, 'tool_name')
+  if (directToolName) {
+    return directToolName
+  }
+
+  const params = actionParams.params
+  if (isObjectRecord(params)) {
+    return getStringField(params, 'name')
+  }
+
+  return null
+}
+
+function getUpstreamContacted(
+  actionParams: Record<string, unknown>,
+  enforcement: Record<string, unknown>,
+): boolean | null {
+  const enforcementValue = getBooleanField(enforcement, 'upstream_contacted')
+  if (enforcementValue !== null) {
+    return enforcementValue
+  }
+
+  const actionParamValue = getBooleanField(actionParams, 'upstream_contacted')
+  if (actionParamValue !== null) {
+    return actionParamValue
+  }
+
+  const upstream = actionParams.upstream
+  if (isObjectRecord(upstream)) {
+    return getBooleanField(upstream, 'contacted')
+  }
+
+  return null
+}
+
+function getDeniedMcpCallEvidence(event: AgentEvent): DeniedMcpCallEvidence | null {
+  if (event.source !== 'mcp' || event.action_type !== 'tool_call') {
+    return null
+  }
+
+  const enforcement = event.action_params.enforcement
+  if (!isObjectRecord(enforcement)) {
+    return null
+  }
+
+  const action = getStringField(enforcement, 'action')
+  if (action?.toLowerCase() !== 'deny') {
+    return null
+  }
+
+  return {
+    event,
+    action,
+    enforcementMode: getStringField(enforcement, 'enforcement_mode'),
+    ruleId: getStringField(enforcement, 'rule_id'),
+    reason: getStringField(enforcement, 'reason'),
+    toolName:
+      getStringField(enforcement, 'tool_name') ??
+      getToolNameFromActionParams(event.action_params) ??
+      'unknown',
+    serverId: getStringField(event.action_params, 'server_id') ?? 'unknown',
+    upstreamContacted: getUpstreamContacted(event.action_params, enforcement),
+  }
+}
+
+function getLobsterTrapRiskAction(record: AuditTimelineRecord): string | null {
+  if (record.source !== 'lobstertrap') {
+    return null
+  }
+
+  const action = String(record.action ?? '').toUpperCase()
+  if (['DENY', 'HUMAN_REVIEW', 'QUARANTINE'].includes(action)) {
+    return action
+  }
+
+  const decision = String(record.decision ?? '').toUpperCase()
+  if (decision === 'BLOCK') {
+    return 'DENY'
+  }
+  if (decision === 'REVIEW') {
+    return 'HUMAN_REVIEW'
+  }
+
+  return null
+}
+
 function getAuditBreakdownCount(
   summary: AuditSummaryResponse | null,
   source: string,
@@ -204,6 +319,13 @@ function buildAuditIncidentGroups(records: AuditTimelineRecord[]): AuditIncident
       continue
     }
 
+    const riskActions = [
+      ...new Set(
+        groupRecords
+          .map(getLobsterTrapRiskAction)
+          .filter((action): action is string => Boolean(action)),
+      ),
+    ]
     const hasLobsterTrapRisk = groupRecords.some(isLobsterTrapRiskRecord)
     const latestAt =
       groupRecords
@@ -215,6 +337,7 @@ function buildAuditIncidentGroups(records: AuditTimelineRecord[]): AuditIncident
       key,
       label: hasLobsterTrapRisk ? 'Elevated cross-layer risk' : 'Cross-layer activity',
       latestAt,
+      riskActions,
       records: [...groupRecords].sort(
         (left, right) =>
           new Date(right.timestamp ?? right.created_at ?? 0).valueOf() -
@@ -528,6 +651,10 @@ function App() {
   const lobstertrapAuditCount = auditTimeline.filter((record) => record.source === 'lobstertrap').length
   const aiwatchAuditCount = auditTimeline.filter((record) => record.source === 'aiwatch').length
   const auditIncidentGroups = buildAuditIncidentGroups(auditTimeline)
+  const recentDeniedMcpCalls = events
+    .map(getDeniedMcpCallEvidence)
+    .filter((evidence): evidence is DeniedMcpCallEvidence => evidence !== null)
+    .slice(0, 4)
   const toolNameServerMap = buildToolNameServerMap(tools)
   const shadowedToolNames = [...toolNameServerMap.entries()]
     .filter(([, servers]) => servers.length > 1)
@@ -1209,6 +1336,70 @@ function App() {
           </div>
         </section>
 
+        <section className="panel enforcement-panel">
+          <div className="section-heading">
+            <div>
+              <span className="panel-label">Enforcement evidence</span>
+              <h3>Recent denied routed MCP calls</h3>
+            </div>
+            <span className="live-count-chip">{recentDeniedMcpCalls.length} shown</span>
+          </div>
+          <p className="muted-copy small-copy">
+            Stored MCP events with opt-in deny metadata from the wrapper, relay, or local demo helper.
+          </p>
+
+          {recentDeniedMcpCalls.length === 0 ? (
+            <div className="empty-state denial-empty">
+              <p>No denied routed MCP calls are stored yet.</p>
+              <code>{DEMO_BLOCKED_MCP_ATTACK_COMMAND}</code>
+            </div>
+          ) : (
+            <div className="denial-list">
+              {recentDeniedMcpCalls.map((evidence) => (
+                <article key={evidence.event.event_id} className="denial-card">
+                  <div className="denial-card-header">
+                    <span className="decision-pill denial-pill">{evidence.action}</span>
+                    {evidence.ruleId ? (
+                      <span className={`rule-pill rule-${getRuleFamily(evidence.ruleId)}`}>
+                        {evidence.ruleId}
+                      </span>
+                    ) : null}
+                    <span className="mono-inline">{formatTimestamp(evidence.event.timestamp)}</span>
+                  </div>
+                  <div className="denial-meta-grid">
+                    <div>
+                      <span>Mode</span>
+                      <strong>{evidence.enforcementMode ?? 'n/a'}</strong>
+                    </div>
+                    <div>
+                      <span>Tool</span>
+                      <strong className="mono-inline wrap-anywhere">{evidence.toolName}</strong>
+                    </div>
+                    <div>
+                      <span>Server</span>
+                      <strong className="mono-inline wrap-anywhere">{evidence.serverId}</strong>
+                    </div>
+                    {evidence.upstreamContacted !== null ? (
+                      <div>
+                        <span>Upstream contacted</span>
+                        <strong className={evidence.upstreamContacted ? 'upstream-true' : 'upstream-false'}>
+                          {String(evidence.upstreamContacted)}
+                        </strong>
+                      </div>
+                    ) : null}
+                  </div>
+                  <p className="denial-reason">
+                    {evidence.reason ?? evidence.ruleId ?? 'Denied routed MCP tool call'}
+                  </p>
+                  <p className="muted-copy small-copy mono-inline wrap-anywhere">
+                    session: {evidence.event.session_id}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="panel recent-alerts-panel">
           <div className="section-heading">
             <div>
@@ -1506,7 +1697,14 @@ function App() {
                   >
                     <div className="timeline-title">
                       <div>
-                        <strong>{group.label}</strong>
+                        <div className="incident-heading-line">
+                          <strong>{group.label}</strong>
+                          {group.riskActions.length > 0 ? (
+                            <span className="incident-risk-badge">
+                              Lobster Trap {group.riskActions.join(' / ')} + AIWatch MCP
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="muted-copy small-copy mono-inline wrap-anywhere">
                           correlation/session key: {group.key}
                         </p>
@@ -1520,7 +1718,9 @@ function App() {
                       </div>
                     </div>
                     <p className="muted-copy small-copy">
-                      Prompt-layer policy decision + MCP tool-layer activity observed in same local correlation group.
+                      {group.riskActions.length > 0
+                        ? 'Lobster Trap policy decision and AIWatch MCP activity share this local correlation key.'
+                        : 'AIWatch MCP activity and Lobster Trap audit records share this local correlation key.'}
                     </p>
                     <div className="incident-record-list">
                       {group.records.slice(0, 4).map((record, index) => (
