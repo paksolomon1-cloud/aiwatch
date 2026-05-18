@@ -97,38 +97,89 @@ def _dashboard_html() -> str:
     :root {
       color-scheme: dark;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #071018;
-      color: #e8f4f8;
+      background: #081014;
+      color: #edf7f5;
+      --bg: #081014;
+      --panel: #101a20;
+      --panel-strong: #14232b;
+      --line: #263a42;
+      --text: #edf7f5;
+      --muted: #a9b8bc;
+      --accent: #8ae6d1;
+      --accent-soft: rgba(138, 230, 209, 0.14);
+      --warning: #f2c572;
+    }
+    * {
+      box-sizing: border-box;
     }
     body {
       margin: 0;
-      background: #071018;
+      background: var(--bg);
     }
     main {
-      max-width: 1080px;
+      max-width: 1120px;
       margin: 0 auto;
-      padding: 40px 20px 56px;
+      padding: 44px 22px 60px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
     }
     h1 {
-      margin: 0 0 10px;
-      font-size: clamp(2rem, 6vw, 4rem);
+      margin: 0;
+      font-size: clamp(2.5rem, 7vw, 4.7rem);
+      line-height: 0.95;
       letter-spacing: 0;
     }
     h2 {
-      margin-top: 32px;
+      margin: 0;
       font-size: 1.25rem;
     }
     p {
       color: #a9bac4;
       line-height: 1.6;
     }
-    .scope {
-      margin: 22px 0;
+    .lede {
+      max-width: 720px;
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .endpoint-card {
+      min-width: 220px;
       padding: 16px;
-      border: 1px solid #2f5364;
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0d1d29;
-      color: #d9f6ff;
+      background: var(--panel);
+    }
+    .endpoint-card span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+    .scope {
+      margin: 24px 0;
+      padding: 16px 18px;
+      border: 1px solid rgba(138, 230, 209, 0.38);
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: #dffdf5;
       font-weight: 700;
     }
     .grid {
@@ -137,65 +188,165 @@ def _dashboard_html() -> str:
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
     .card {
-      border: 1px solid #1f3340;
+      border: 1px solid var(--line);
       border-radius: 8px;
-      background: #0b1720;
-      padding: 16px;
+      background: var(--panel);
+      padding: 18px;
+    }
+    .status-grid {
+      margin: 0 0 20px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .status-card {
+      min-height: 138px;
+    }
+    .status-label {
+      display: inline-block;
+      margin-bottom: 12px;
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .status-card strong {
+      display: block;
+      color: var(--text);
+      font-size: 1.05rem;
+      line-height: 1.35;
+    }
+    .status-card p,
+    .card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+    .section-panel {
+      margin-top: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 16px;
-      overflow: hidden;
-      border-radius: 8px;
-      border: 1px solid #1f3340;
+      min-width: 760px;
     }
     th, td {
-      padding: 12px;
-      border-bottom: 1px solid #1f3340;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
     }
     th {
-      color: #a9bac4;
-      background: #0d1d29;
+      color: var(--muted);
+      background: #0b151b;
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      white-space: nowrap;
     }
     tr:last-child td {
       border-bottom: 0;
     }
     code {
-      color: #d9f6ff;
+      color: #defcf4;
+      font-size: 0.92em;
+    }
+    .endpoint {
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+    .endpoint-card .endpoint {
+      display: block;
+    }
+    .endpoint-card .endpoint + .endpoint {
+      margin-top: 6px;
+    }
+    .tool-cell,
+    .server-cell {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
       overflow-wrap: anywhere;
+    }
+    .summary-cell {
+      color: #d6e2e5;
+      line-height: 1.5;
     }
     .risk {
       display: inline-block;
       border-radius: 999px;
-      padding: 3px 8px;
-      background: #193348;
-      color: #d9f6ff;
+      padding: 4px 10px;
+      background: rgba(242, 197, 114, 0.15);
+      color: var(--warning);
       font-size: 0.82rem;
       font-weight: 700;
+      white-space: nowrap;
     }
     .sample {
-      color: #8fddff;
+      display: inline-block;
+      margin-top: 8px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: rgba(138, 230, 209, 0.12);
+      color: var(--accent);
       font-size: 0.82rem;
       font-weight: 700;
+      white-space: nowrap;
+    }
+    .demo-note {
+      color: var(--muted);
+    }
+    .demo-note strong {
+      color: var(--text);
     }
     @media (max-width: 720px) {
+      main {
+        padding: 30px 14px 42px;
+      }
+      .hero,
+      .section-head {
+        display: block;
+      }
+      .endpoint-card {
+        margin-top: 20px;
+      }
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
       table, thead, tbody, th, td, tr {
         display: block;
+      }
+      table {
+        min-width: 0;
       }
       thead {
         display: none;
       }
       tr {
-        border-bottom: 1px solid #1f3340;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
       }
       td {
         border-bottom: 0;
+        padding: 8px 16px;
       }
       td::before {
         content: attr(data-label);
@@ -211,37 +362,74 @@ def _dashboard_html() -> str:
 </head>
 <body>
   <main>
-    <h1>AIWatch</h1>
-    <p>Hosted hackathon demo dashboard for MCP tool-layer observability.</p>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Replit judge demo</p>
+        <h1>AIWatch</h1>
+        <p class="lede">A lightweight hosted view for MCP tool-layer event summaries.</p>
+      </div>
+      <aside class="endpoint-card" aria-label="Demo API endpoints">
+        <span>Demo API</span>
+        <code class="endpoint">POST /api/events</code>
+        <code class="endpoint">GET /api/events</code>
+      </aside>
+    </header>
+
     <div class="scope">AIWatch observes MCP traffic routed through the AIWatch wrapper or relay.</div>
+
+    <section class="grid status-grid" aria-label="Demo status">
+      <div class="card status-card">
+        <span class="status-label">MCP scoped</span>
+        <strong>Focused on routed MCP tool activity.</strong>
+        <p>No prompt, shell, file, hidden reasoning, laptop, or broad process monitoring is claimed here.</p>
+      </div>
+      <div class="card status-card">
+        <span class="status-label">Local wrapper/relay</span>
+        <strong>Full AIWatch observation happens locally.</strong>
+        <p>MCP clients must route traffic through the AIWatch stdio wrapper or local HTTP MCP relay.</p>
+      </div>
+      <div class="card status-card">
+        <span class="status-label">Demo events</span>
+        <strong>Hosted rows are summaries for judging.</strong>
+        <p>When no posted summaries exist, rows are clearly marked as demo/sample data.</p>
+      </div>
+    </section>
 
     <section class="grid" aria-label="Demo notes">
       <div class="card">
         <h2>How the demo works</h2>
-        <p>This Replit app accepts summarized AIWatch events at <code>POST /api/events</code>, keeps recent events in memory, and shows them below. If no real event summaries have arrived, sample rows are shown and labeled as demo data.</p>
+        <p>This Replit app accepts summarized AIWatch events at <code class="endpoint">POST /api/events</code>, keeps recent events in memory, and shows them below. If no real event summaries have arrived, sample rows are shown and labeled as demo/sample data.</p>
       </div>
       <div class="card">
-        <h2>Reproduce locally</h2>
-        <p>Run the full local AIWatch backend and dashboard from GitHub to observe real MCP traffic routed through the stdio wrapper or local HTTP MCP relay. This hosted page is a judge-friendly summary view, not broad system monitoring.</p>
+        <h2>Local reproduction</h2>
+        <p>Run the full local AIWatch backend and dashboard from GitHub to observe routed MCP traffic through the stdio wrapper or local HTTP MCP relay. This hosted page is a judge-friendly summary view, not the full product dashboard.</p>
       </div>
     </section>
 
-    <section>
-      <h2>Recent events</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Tool</th>
-            <th>Server</th>
-            <th>Risk</th>
-            <th>Summary</th>
-          </tr>
-        </thead>
-        <tbody id="events-body">
-          <tr><td colspan="5">Loading events...</td></tr>
-        </tbody>
-      </table>
+    <section class="section-panel">
+      <div class="section-head">
+        <div>
+          <h2>Recent events</h2>
+          <p>Refreshes every 5 seconds from <code class="endpoint">GET /api/events</code>.</p>
+        </div>
+        <p class="demo-note"><strong>Demo/sample</strong> labels mean no real summaries have been posted yet.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Tool</th>
+              <th>Server</th>
+              <th>Risk</th>
+              <th>Summary</th>
+            </tr>
+          </thead>
+          <tbody id="events-body">
+            <tr><td colspan="5">Loading events...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script>
@@ -280,6 +468,9 @@ def _dashboard_html() -> str:
         body.innerHTML = ''
         for (const event of events) {
           const row = document.createElement('tr')
+          if (event.demo) {
+            row.className = 'demo-row'
+          }
           const timestampCell = cell('Timestamp', event.timestamp || event.received_at)
           if (event.demo) {
             const sample = document.createElement('div')
@@ -293,11 +484,17 @@ def _dashboard_html() -> str:
           risk.className = 'risk'
           risk.textContent = text(eventRisk(event), 'n/a')
           riskCell.appendChild(risk)
+          const toolCell = cell('Tool', eventTool(event))
+          toolCell.className = 'tool-cell'
+          const serverCell = cell('Server', eventServer(event))
+          serverCell.className = 'server-cell'
+          const summaryCell = cell('Summary', eventSummary(event))
+          summaryCell.className = 'summary-cell'
           row.appendChild(timestampCell)
-          row.appendChild(cell('Tool', eventTool(event)))
-          row.appendChild(cell('Server', eventServer(event)))
+          row.appendChild(toolCell)
+          row.appendChild(serverCell)
           row.appendChild(riskCell)
-          row.appendChild(cell('Summary', eventSummary(event)))
+          row.appendChild(summaryCell)
           body.appendChild(row)
         }
       } catch (error) {
