@@ -12,6 +12,139 @@ Veea is the broader runtime-security vision; AIWatch is the working MCP-first pr
 
 Future Veea direction may include more adapters, richer policy controls, runtime risk scoring, optional blocking, and broader compatibility. Do not imply those future capabilities are implemented in AIWatch today.
 
+## 3-Minute Hackathon Demo Script
+
+Use this when a judge needs the clearest short path through the product. Keep the backend and frontend terminals visible enough that command order is obvious.
+
+### 0. What To Say
+
+```text
+AIWatch is the agent/tool runtime layer. Lobster Trap is the prompt/response policy layer. Unified Audit correlates both layers locally. Enforcement is opt-in and only applies to routed MCP traffic through the AIWatch wrapper or local relay.
+```
+
+### 1. Start The Backend
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330
+```
+
+### 2. Start The Frontend
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173/
+```
+
+Use the localhost URL printed by Vite if it differs.
+
+### 3. Seed The Unified Demo
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+What to click:
+
+- `Overview`
+- `Coverage / Controls`
+- `Unified Audit`
+- `Tools / Registry`
+
+What to say:
+
+```text
+The Coverage / Controls panel is the product map: AIWatch covers routed MCP tool traffic, Lobster Trap covers prompt/response audit records, and Unified Audit shows both local layers together.
+```
+
+### 4. Show Unified Audit
+
+Open `Unified Audit`.
+
+Expected bundled demo result:
+
+- AIWatch MCP records are present.
+- Lobster Trap records are present.
+- Shared session or correlation metadata can create cross-layer grouped incidents.
+- Cross-layer groups can show elevated local risk context when both layers have related risk signals.
+
+What to say:
+
+```text
+AIWatch ingests Lobster Trap prompt/response audit records locally and correlates them with routed MCP records when session or correlation metadata lines up.
+```
+
+### 5. Show The Manual Quarantine Control Loop
+
+Use `search_notes` for the bundled extended registry demo, or choose a tool name from `Tools / Registry`.
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantine-tool --tool-name search_notes --reason "Demo quarantine after suspicious routed MCP behavior" --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+```
+
+What to say:
+
+```text
+This is the control loop: detect a suspicious routed MCP tool, manually quarantine it in the local registry, then use opt-in deny mode for future routed calls to that selected tool.
+```
+
+### 6. Explain Deny Mode
+
+```text
+In observe mode, quarantined tools are marked but still forwarded. In opt-in deny mode, future routed calls to quarantined tools are stopped before forwarding through the AIWatch wrapper or relay.
+```
+
+To demonstrate the configuration state:
+
+```powershell
+py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:7330
+```
+
+To run a local wrapper or relay in deny mode, set this before starting that wrapper or relay process:
+
+```powershell
+$env:AIWATCH_ENFORCEMENT_MODE="deny"
+```
+
+### 7. Optional Live Lobster Trap Prompt-Layer Ingest
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
+What to say:
+
+```text
+LLM traffic must be routed through Lobster Trap for live prompt/response audit records. AIWatch ingests the Lobster Trap JSONL audit log and correlates those records with routed MCP activity when correlation or session metadata lines up.
+```
+
+### 8. Closing Statement
+
+```text
+AIWatch provides a local trust layer for routed MCP agents: it observes tool traffic, detects risky MCP behavior, ingests Lobster Trap prompt/response audit records, correlates both layers in Unified Audit, and can optionally deny selected high-risk or quarantined routed tool calls before forwarding.
+```
+
+### Troubleshooting
+
+- Backend not running: start `py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330` from `C:\Users\pakso\Desktop\aiwatch\backend`.
+- Dev endpoints disabled: set `$env:AIWATCH_DEV_MODE="true"` before starting the backend.
+- Frontend URL: use the localhost URL printed by Vite, usually `http://localhost:5173/`.
+- Unified Audit shows zero records: run `py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330`.
+- Lobster Trap shows no records: run the unified demo seed, ingest demo records, or run `lobstertrap-live-ingest --follow` against a local audit JSONL file.
+- DB modified after demo: do not commit `backend/data/aiwatch.db`.
+
 ## Live Demo Flow
 
 ### 1. Opening Pitch

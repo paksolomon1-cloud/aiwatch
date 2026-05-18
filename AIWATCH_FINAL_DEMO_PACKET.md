@@ -20,7 +20,122 @@ Phase 2 local merge artifact: AIWatch can merge its local MCP audit timeline JSO
 
 Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a local SQLite-backed unified audit timeline and show those records in the AIWatch dashboard beside AIWatch MCP-layer records. The Unified Audit tab includes local risk counts and cross-layer grouping when shared session/request metadata is present. This is local integration, not a Veea cloud control plane, and AIWatch still does not inspect prompts directly.
 
-## 3. 5-minute demo script
+## 3. 3-minute hackathon demo script
+
+Use this as the polished live path. It is intentionally shorter than the fallback proof commands.
+
+### What to say first
+
+```text
+AIWatch is the agent/tool runtime layer. Lobster Trap is the prompt/response policy layer. Unified Audit correlates both layers locally. Enforcement is opt-in and only applies to routed MCP traffic through the AIWatch wrapper or local relay.
+```
+
+### Start backend in demo mode
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 7330
+```
+
+### Start frontend
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\frontend
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173/
+```
+
+### Seed unified demo
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+### What to click
+
+- `Overview`
+- `Coverage / Controls`
+- `Unified Audit`
+- `Tools / Registry`
+
+### What to say while clicking
+
+```text
+The Coverage / Controls panel is the product map: AIWatch covers routed MCP tool traffic, Lobster Trap covers prompt/response audit records, and Unified Audit shows both local layers together.
+```
+
+In `Unified Audit`, point out:
+
+- AIWatch MCP records
+- Lobster Trap records
+- cross-layer grouped incidents when metadata lines up
+- elevated local risk context when related risk signals appear in both layers
+
+```text
+AIWatch ingests Lobster Trap prompt/response audit records locally and correlates them with routed MCP records when session or correlation metadata lines up.
+```
+
+### Manual quarantine control loop
+
+Use `search_notes` for the bundled extended registry demo, or choose a visible tool name from `Tools / Registry`.
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantine-tool --tool-name search_notes --reason "Demo quarantine after suspicious routed MCP behavior" --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py quarantined-tools --backend-url http://127.0.0.1:7330
+```
+
+```text
+This is the control loop: detect a suspicious routed MCP tool, manually quarantine it in the local registry, then use opt-in deny mode for future routed calls to that selected tool.
+```
+
+### Explain deny mode
+
+```text
+In observe mode, quarantined tools are marked but still forwarded. In opt-in deny mode, future routed calls to quarantined tools are stopped before forwarding through the AIWatch wrapper or relay.
+```
+
+Optional status/config commands:
+
+```powershell
+py -3.12 scripts\aiwatch.py enforcement-status --backend-url http://127.0.0.1:7330
+$env:AIWATCH_ENFORCEMENT_MODE="deny"
+```
+
+### Optional live Lobster Trap prompt-layer ingest
+
+```powershell
+py -3.12 scripts\aiwatch.py lobstertrap-live-ingest --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330 --follow
+```
+
+```text
+LLM traffic must be routed through Lobster Trap for live prompt/response audit records. AIWatch ingests the Lobster Trap JSONL audit log and correlates those records with routed MCP activity when correlation or session metadata lines up.
+```
+
+### Closing statement
+
+```text
+AIWatch provides a local trust layer for routed MCP agents: it observes tool traffic, detects risky MCP behavior, ingests Lobster Trap prompt/response audit records, correlates both layers in Unified Audit, and can optionally deny selected high-risk or quarantined routed tool calls before forwarding.
+```
+
+### Troubleshooting
+
+- Backend not running: start the backend command above from `C:\Users\pakso\Desktop\aiwatch\backend`.
+- Dev endpoints disabled: set `$env:AIWATCH_DEV_MODE="true"` before starting the backend.
+- Frontend URL: use the localhost URL printed by Vite.
+- Unified Audit shows zero records: run `demo-seed-unified --extended`.
+- Lobster Trap shows no records: ingest demo records or run `lobstertrap-live-ingest --follow`.
+- DB modified after demo: do not commit `backend/data/aiwatch.db`.
+
+## 4. 5-minute demo script
 
 ### Open dashboard
 
@@ -103,7 +218,7 @@ Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a
 
 `This is a narrow, local proof that AIWatch can observe MCP traffic routed through its stdio wrapper or local HTTP MCP relay, not a universal client or proxy claim.`
 
-## 4. CLI-only fallback demo
+## 5. CLI-only fallback demo
 
 ### Start backend
 
@@ -173,7 +288,7 @@ Expected:
 
 Scope: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
 
-## 5. Architecture explanation
+## 6. Architecture explanation
 
 The MCP client launches or routes an MCP server through the AIWatch stdio wrapper/tap or local HTTP MCP relay. Those observation paths capture relevant MCP `tools/list` and `tools/call` activity and post normalized events into the FastAPI backend. The backend writes sanitized events into SQLite, updates the MCP tool registry and history, runs deterministic rules, and exposes results to the CLI and dashboard.
 
@@ -189,7 +304,7 @@ In plain English:
 - deterministic rule engine: fixed rule checks, not an LLM judge
 - CLI/dashboard: operator views into what AIWatch observed
 
-## 6. Rule explanation
+## 7. Rule explanation
 
 ### R-MCP-001
 
@@ -229,7 +344,7 @@ Does not catch:
 - proof that a detected value is active or valid
 - proof that all possible secrets are detected
 
-## 7. Proof points
+## 8. Proof points
 
 - `pytest`: `175 passed`
 - `eval`: `43/43`
@@ -245,7 +360,7 @@ Does not catch:
 - replay missing-session `404`
 - seed count tests
 
-## 7.1 Future Veea Roadmap
+## 8.1 Future Veea Roadmap
 
 - additional adapters beyond MCP
 - richer policy controls
@@ -255,7 +370,7 @@ Does not catch:
 
 These are future Veea directions, not implemented AIWatch claims.
 
-## 8. Hard Q&A
+## 9. Hard Q&A
 
 ### Does AIWatch monitor Claude Code?
 
@@ -317,7 +432,7 @@ It proves that the pinned real local stdio MCP package paths can run through the
 
 AIWatch only sees routed MCP traffic, the package smoke depends on Node/npm/npx, the HTTP relay Phase A path is only a local POST JSON MCP request/response subset, the frontend R-MCP-005 demo is synthetic, and `R-MCP-005` does not prove total secret coverage.
 
-## 9. Caveats / non-goals
+## 10. Caveats / non-goals
 
 - no generic Claude/Cursor monitoring
 - no prompt monitoring
@@ -331,7 +446,7 @@ AIWatch only sees routed MCP traffic, the package smoke depends on Node/npm/npx,
 - backend must already be running before seed and smoke commands
 - frontend `Trigger R-MCP-005 Demo` is synthetic
 
-## 10. Future work
+## 11. Future work
 
 - broader MCP server compatibility testing
 - full Streamable HTTP/SSE MCP support
