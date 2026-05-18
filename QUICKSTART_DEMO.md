@@ -1,6 +1,6 @@
 # AIWatch Reproducible Demo Checklist
 
-AIWatch observes MCP traffic routed through the AIWatch wrapper. This checklist is for a clean local demo path, not a production deployment guide.
+AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. This checklist is for a clean local demo path, not a production deployment guide.
 
 ## Prerequisites
 
@@ -117,11 +117,12 @@ Known detected credential-shaped values are redacted on tested backend/API/CLI s
 
 Use this wording:
 
-- AIWatch observes MCP traffic routed through the AIWatch wrapper.
+- AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 - The wrapper is an experimental local wrapper path for stdio MCP traffic.
+- The local HTTP MCP relay is experimental, local-only, MCP-specific, and limited to a POST JSON request/response subset.
 - Claude Code-routed MCP traffic can be observed when Claude Code launches an MCP server through the local stdio MCP wrapper.
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude internals, Cursor internals, or arbitrary local process activity.
-- This is not a production-ready proxy and does not guarantee all secrets are caught.
+- This is not a production-ready proxy, does not implement full Streamable HTTP, SSE, GET stream handling, or generic HTTP proxying, and does not guarantee all secrets are caught.
 
 ## B. CLI-Only Demo
 
@@ -326,6 +327,36 @@ Use [docs/CLAUDE_CODE_RUNTIME_SMOKE.md](docs/CLAUDE_CODE_RUNTIME_SMOKE.md) for t
 
 Do not restate it as generic Claude Code monitoring. The proven path is Claude Code launching a local stdio MCP server through the AIWatch wrapper.
 
+## F. Experimental Local HTTP MCP Relay Smoke
+
+This exercises the local-only HTTP relay Phase A path. It is an experimental MCP-specific POST JSON request/response subset routed through the AIWatch local HTTP MCP relay.
+
+### 1. Start Backend
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+$env:AIWATCH_DEV_MODE="true"
+py -3.12 -m uvicorn app.main:app --reload --port 7330
+```
+
+### 2. Run Smoke
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py clear
+py -3.12 scripts\run_http_mcp_relay_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
+Expected:
+
+- observed tools: `echo_note`, `list_notes`
+- server ID: `fixture-http-notes-mcp`
+- alerts: `No alerts found.`
+
+Scope: this is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+
 ## Regression Checks
 
 Run:
@@ -339,7 +370,7 @@ py -3.12 eval\run_eval.py
 Current expected results:
 
 ```text
-pytest: 113 passed
+pytest: 130 passed
 eval: 39/39 passed
 false positives: none
 false negatives: none

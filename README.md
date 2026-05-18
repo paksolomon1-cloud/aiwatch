@@ -1,6 +1,8 @@
 # AIWatch
 
-AIWatch is a local MCP observability and security layer. It observes MCP traffic routed through the AIWatch stdio wrapper, records MCP tool definitions and tool calls, fingerprints tools, and raises deterministic alerts for tool-surface risks.
+AIWatch is a local MCP observability and security layer. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. It records MCP tool definitions and tool calls, fingerprints tools, and raises deterministic alerts for tool-surface risks.
+
+Veea is a runtime security layer for tool-using AI agents. AIWatch is the first working implementation, focused on MCP tool traffic.
 
 AIWatch is MCP-first. It is not generic Claude Code monitoring, Cursor monitoring, laptop monitoring, prompt monitoring, shell monitoring, file-edit monitoring, hidden-reasoning visibility, or arbitrary local process monitoring.
 
@@ -9,7 +11,7 @@ AIWatch is MCP-first. It is not generic Claude Code monitoring, Cursor monitorin
 - `R-MCP-001`: poisoned MCP tool descriptions
 - `R-MCP-002`: MCP tool fingerprint drift
 - `R-MCP-004`: MCP tool name shadowing across servers
-- `R-MCP-005`: credential-shaped values in MCP `tools/call` parameters, with safe redaction before storage/output for detected credential values
+- `R-MCP-005`: credential-shaped values in MCP `tools/call` parameters, with safe redaction of known detected credential-shaped values on tested backend/API/CLI surfaces
 
 The repo still contains legacy/demo coding-agent rules for seeded demos and eval fixtures, but the product center is MCP observability and integrity.
 
@@ -23,6 +25,7 @@ The repo still contains legacy/demo coding-agent rules for seeded demos and eval
 - CLI wrapper at `backend/scripts/aiwatch.py`
 - React dashboard
 - local stdio MCP wrapper/tap path at `backend/scripts/aiwatch_stdio_tap.py`
+- experimental local HTTP MCP relay at `backend/scripts/aiwatch_http_mcp_relay.py`
 - `aiwatch doctor` config health check for local `.mcp.json` and `.cursor/mcp.json`
 - deterministic local eval harness
 
@@ -33,12 +36,13 @@ Real ingestion paths use the canonical backend ingest function. Known detected c
 - Claude Code local stdio MCP wrapper runtime smoke succeeded on Windows.
 - AIWatch observed Claude Code-routed MCP traffic when Claude Code launched an MCP server through the AIWatch stdio wrapper.
 - Real MCP package smokes passed for `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
-- Tests recently passed: `113`.
+- Tests recently passed: `130`.
 - Eval recently passed: `39/39`.
+- Local HTTP POST JSON MCP relay smoke passed for `fixture-http-notes-mcp`.
 - Core seed expected count: `5 events / 7 alerts`.
 - Extended seed expected count: `8 events / 10 alerts`.
 
-The Claude Code runtime smoke proves local stdio MCP routing through AIWatch worked. It does not prove generic Claude Code monitoring, production proxy coverage, or visibility into prompts, shell commands, file edits, hidden reasoning, or Claude Code internals.
+The Claude Code runtime smoke proves local stdio MCP routing through AIWatch worked. The HTTP relay smoke proves the experimental local POST JSON MCP relay can observe a narrow MCP request/response subset when traffic is routed through the AIWatch local HTTP MCP relay. Neither smoke proves generic Claude Code monitoring, generic Cursor monitoring, production proxy coverage, full Streamable HTTP support, SSE support, GET stream handling, prompt visibility, shell command visibility, file edit visibility, hidden reasoning visibility, or client internals visibility.
 
 ## Quickstart
 
@@ -96,6 +100,24 @@ py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
 py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 ```
 
+Run the experimental local HTTP POST JSON MCP relay smoke:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py clear
+py -3.12 scripts\run_http_mcp_relay_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
+Expected:
+
+- observed tools: `echo_note`, `list_notes`
+- server ID: `fixture-http-notes-mcp`
+- alerts: `No alerts found.`
+
+Scope: this is a local-only, experimental, MCP-specific POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+
 Run the config health check from the repo root:
 
 ```powershell
@@ -115,11 +137,12 @@ py -3.12 eval\run_eval.py
 
 - MCP traffic must be routed through AIWatch to be observed.
 - This is a local/dev demo posture, not a production enterprise gateway.
+- The local HTTP MCP relay is experimental, MCP-specific, and limited to a local POST JSON request/response subset routed through AIWatch.
 - `POST /v1/events` rejects request bodies over 4 MiB before event validation or ingest.
 - Missing session replay requests return `404`.
 - AIWatch does not observe prompts, shell commands, file edits, hidden reasoning, Claude Code internals, Cursor internals, or arbitrary local process activity.
 - AIWatch does not guarantee prevention of all exfiltration.
-- AIWatch does not implement production auth, HMAC logs, semantic embeddings, HTTP/SSE MCP proxying, SIEM/exporters, ML detection, or Cursor runtime support.
+- AIWatch does not implement production auth, HMAC logs, semantic embeddings, full Streamable HTTP, SSE, GET stream handling, a generic HTTP proxy, production-ready proxying, SIEM/exporters, ML detection, or Cursor runtime support.
 - `aiwatch doctor` checks config shape only; it cannot prove a client loaded that config or prevent config tampering.
 
 ## Documentation
@@ -131,6 +154,7 @@ py -3.12 eval\run_eval.py
 - [Claude Code runtime smoke checklist](docs/CLAUDE_CODE_RUNTIME_SMOKE.md)
 - [Claude Code MCP wrapper docs](docs/CLAUDE_CODE_MCP_WRAPPER.md)
 - [Cursor MCP smoke exploration](docs/CURSOR_MCP_RUNTIME_SMOKE.md)
+- [HTTP MCP relay Phase A](docs/HTTP_MCP_RELAY_PHASE_A.md)
 - [AIWatch doctor docs](docs/AIWATCH_DOCTOR.md)
 - [MCP credential parameter detection](docs/MCP_CREDENTIAL_PARAMETER_DETECTION.md)
 - [Threat model](THREAT_MODEL.md)

@@ -14,7 +14,7 @@ No future task should broaden AIWatch's claim without first updating this spec.
   - initial demo-ready checkpoint
   - generated artifact ignore cleanup
   - UI/layout/R-MCP-005 collapse/root wording fixes
-- `pytest`: `113 passed`
+- `pytest`: `130 passed`
 - `eval`: `39/39`
 - Frontend build passes.
 - Fixture stdio smoke works.
@@ -30,7 +30,9 @@ No future task should broaden AIWatch's claim without first updating this spec.
 - `R-MCP-005` redaction regressions cover tested backend/API/CLI surfaces.
 - `aiwatch doctor` and `aiwatch doctor --json` exist.
 - Root API message now uses canonical MCP-first wording.
-- Dashboard proof points show `113`, `39/39`, `5/7`, `8/10`.
+- Dashboard proof points show `130`, `39/39`, `5/7`, `8/10`.
+- Local HTTP MCP relay Phase A POST JSON subset smoke works.
+- Local HTTP MCP relay smoke observed `echo_note` and `list_notes` under `fixture-http-notes-mcp` with `No alerts found.`
 - `R-MCP-005` action params are collapsed by default in session replay.
 - Nonexistent session replay now returns `404`.
 - `POST /v1/events` rejects request bodies over 4 MiB with `413` before `AgentEvent` validation or canonical ingest.
@@ -71,11 +73,11 @@ No future task should broaden AIWatch's claim without first updating this spec.
 
 ## 2. Product Boundary
 
-AIWatch observes MCP traffic routed through the AIWatch wrapper.
+AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
 The core product claim is:
 
-> AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch wrapper.
+> AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
 Runtime smoke with Claude Code means Claude Code-routed MCP traffic can be observed when configured through the wrapper. It does not mean AIWatch monitors Claude Code generally.
 
@@ -98,6 +100,7 @@ AIWatch does not currently claim:
 - generic Claude Code monitoring
 - generic Cursor monitoring
 - production-ready universal MCP proxying
+- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying
 - all-secret detection
 - all-exfiltration blocking
 - enterprise auth
@@ -124,7 +127,7 @@ These phrases may appear only as explicit negative examples or caveats.
 
 Use these phrases:
 
-- "MCP traffic routed through the AIWatch wrapper"
+- "MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay"
 - "Claude Code-routed MCP traffic"
 - "Cursor-routed MCP traffic, if configured through the wrapper"
 - "local stdio MCP wrapper"
@@ -134,12 +137,13 @@ Use these phrases:
 
 ## 3. Existing Architecture
 
-AIWatch is a local MCP observation and integrity system built around a stdio wrapper/tap and a backend ingest path.
+AIWatch is a local MCP observation and integrity system built around a stdio wrapper/tap, a local HTTP MCP relay Phase A path, and a backend ingest path.
 
 | Component | Role |
 | --- | --- |
 | MCP client | Launches or talks to an MCP server. Examples include local demo clients and Claude Code when configured through the wrapper. |
 | AIWatch stdio wrapper/tap | Sits between the MCP client and upstream MCP server, forwards stdio traffic, and captures relevant MCP frames. |
+| AIWatch local HTTP MCP relay | Experimental local-only MCP relay for a POST JSON request/response subset routed to one fixed local upstream endpoint. |
 | Upstream MCP server | Provides MCP tools. The server is not modified by AIWatch. |
 | FastAPI backend | Receives normalized events, serves events/alerts/tools, and exposes dev/demo endpoints. |
 | SQLite local store | Stores events, alerts, tool fingerprints, and tool observation history. |
@@ -285,12 +289,13 @@ Required redaction statement:
 
 | Proof point | Current result |
 | --- | --- |
-| Backend tests | `113 passed` |
+| Backend tests | `130 passed` |
 | Eval | `39/39` |
 | Fixture stdio smoke | Works |
 | Claude Code stdio MCP smoke | Works |
 | Real MCP package smoke | Works with `@modelcontextprotocol/server-sequential-thinking@2025.7.1` |
 | Second real MCP package smoke | Works with `@modelcontextprotocol/server-memory@2026.1.26` |
+| Local HTTP MCP relay smoke | Works for `fixture-http-notes-mcp`; observed tools: `echo_note`, `list_notes`; alerts: `No alerts found.` |
 | Canonical ingest audit | Complete |
 | Rollback tests | Present |
 | Redaction regression tests | Present |
@@ -350,7 +355,7 @@ Reason:
 
 Defer:
 
-- HTTP/SSE MCP support
+- full Streamable HTTP/SSE MCP support beyond the current local POST JSON Phase A subset
 - broader compatibility matrix
 - optional blocking policy
 - tamper-evident logs
@@ -369,14 +374,14 @@ Reason:
 5. Replay endpoint `404` plus frontend silent clear coupling fix.
 6. Request body size guard.
 7. Docs sweep.
-8. Only then consider HTTP/SSE MCP support.
+8. Only then consider full Streamable HTTP/SSE MCP support beyond the current local POST JSON Phase A subset.
 
 Why this order:
 
 - Wrapper hardening reduces risk before connecting more clients.
 - A second real package strengthens compatibility evidence while staying narrow.
 - Claude Code and Cursor must remain MCP-routed smoke tests, not generic monitoring claims.
-- HTTP/SSE expands scope and should come later.
+- Full Streamable HTTP/SSE expands scope and should come later; the current Phase A relay remains local-only, experimental, MCP-specific, and POST JSON only.
 
 ## 8. Stdio Tap Robustness Spec
 
@@ -638,7 +643,7 @@ These are intentionally not next:
 
 - generic Claude monitoring
 - generic Cursor monitoring
-- HTTP/SSE MCP proxy
+- full Streamable HTTP/SSE MCP proxy
 - ML detector
 - enterprise auth
 - hosted dashboard
@@ -652,4 +657,4 @@ These can be reconsidered only after wrapper robustness and runtime smoke expans
 
 ## 16. Final Operating Rule
 
-When in doubt, preserve the narrow claim: AIWatch observes MCP traffic routed through the AIWatch wrapper. Do not expand the claim just because a client like Claude Code or Cursor is involved.
+When in doubt, preserve the narrow claim: AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. Do not expand the claim just because a client like Claude Code or Cursor is involved.

@@ -2,13 +2,13 @@
 
 ## One-Sentence Pitch
 
-AIWatch is a local MCP observability and security layer that observes MCP traffic routed through the AIWatch wrapper, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-leaking MCP tool activity.
+AIWatch is a local MCP observability and security layer. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-shaped MCP tool-call parameters.
 
 ## 30-Second Explanation
 
 - MCP gives agents tools.
 - Tool descriptions and tool-call parameters can carry security risk.
-- AIWatch observes MCP traffic routed through its local stdio wrapper/tap path.
+- AIWatch observes MCP traffic routed through its local stdio wrapper/tap path or experimental local HTTP MCP relay.
 - It captures `tools/list` and `tools/call` traffic.
 - It fingerprints tool definitions and keeps registry history.
 - It alerts on poisoned descriptions, drift, shadowing, and credential-shaped tool-call parameters.
@@ -60,6 +60,23 @@ Expected:
 - Alerts show `R-MCP-001` from captured `tools/list`.
 - The benign `tools/call` in the smoke is captured without `R-MCP-005`.
 - Protocol stdout is not polluted with AIWatch diagnostics.
+
+### Experimental Local HTTP MCP Relay Smoke
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py clear
+py -3.12 scripts\run_http_mcp_relay_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
+Expected:
+
+- Tools show `echo_note` and `list_notes` on `fixture-http-notes-mcp`.
+- Alerts show `No alerts found.`
+
+Key message: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
 
 ### Claude Code Live-Smoke Option
 
@@ -132,8 +149,9 @@ Key message:
 
 ### Wrapper/Tap Path
 
-- "This is an experimental local stdio MCP wrapper/tap path, not a production proxy."
+- "This is an experimental local stdio MCP wrapper/tap path and local HTTP MCP relay path, not a production proxy."
 - "It forwards newline-delimited JSON-RPC, captures correlated `tools/list`, captures `tools/call` requests, normalizes events, and reuses the same detection pipeline."
+- "The HTTP relay Phase A path covers only local POST JSON MCP request/response traffic routed through the AIWatch local HTTP MCP relay."
 
 ### Eval Harness
 
@@ -151,16 +169,17 @@ Key message:
 - shadowing detection
 - poisoned description detection
 - credential-shaped tool-call parameter detection
-- redaction before storage/output for detected credentials
+- redaction of known detected credential-shaped values on tested backend/API/CLI surfaces
 - `aiwatch doctor` config health check
 - local stdio MCP wrapper/tap path
+- experimental local HTTP POST JSON MCP relay smoke
 - Claude Code local stdio MCP runtime smoke succeeded
 - two real no-token MCP package smoke paths
 - `/v1/events` 4 MiB request body guard
 - missing session replay returns `404`
 - React dashboard
 - deterministic local eval harness
-- 113 pytest passing
+- 130 pytest passing
 - 39/39 eval passing
 
 ## Claims Not To Make

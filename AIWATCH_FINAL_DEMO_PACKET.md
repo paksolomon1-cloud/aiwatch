@@ -2,11 +2,11 @@
 
 ## 1. One-line thesis
 
-AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch wrapper.
+AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
 ## 2. 20-second pitch
 
-MCP gives agents tools, and tool definitions plus tool calls create a real trust boundary. AIWatch makes that boundary visible by observing MCP traffic routed through its wrapper, fingerprinting tools, and flagging poisoned descriptions, drift, shadowing, and credential-shaped tool-call parameters.
+MCP gives agents tools, and tool definitions plus tool calls create a real trust boundary. AIWatch makes that boundary visible by observing MCP traffic routed through its stdio wrapper or local HTTP MCP relay, fingerprinting tools, and flagging poisoned descriptions, drift, shadowing, and credential-shaped tool-call parameters.
 
 ## 3. 5-minute demo script
 
@@ -16,7 +16,7 @@ MCP gives agents tools, and tool definitions plus tool calls create a real trust
 2. Open the dashboard in the browser.
 3. Say this limitation line before clicking anything:
 
-`AIWatch observes only MCP traffic routed through the wrapper. It does not observe prompts, shell commands, file edits, hidden reasoning, or generic Claude/Cursor internals.`
+`AIWatch observes only MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. It does not observe prompts, shell commands, file edits, hidden reasoning, or generic Claude/Cursor internals.`
 
 ### Seed core demo
 
@@ -77,7 +77,7 @@ MCP gives agents tools, and tool definitions plus tool calls create a real trust
 3. Mention the two real MCP package smokes with `@modelcontextprotocol/server-sequential-thinking@2025.7.1` and `@modelcontextprotocol/server-memory@2026.1.26`.
 4. Say:
 
-`This is a narrow, local proof that AIWatch can observe MCP traffic routed through its wrapper, not a universal client or proxy claim.`
+`This is a narrow, local proof that AIWatch can observe MCP traffic routed through its stdio wrapper or local HTTP MCP relay, not a universal client or proxy claim.`
 
 ## 4. CLI-only fallback demo
 
@@ -143,20 +143,39 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `113 passed`
+- tests: `130 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
 - second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
 
+### Run experimental local HTTP MCP relay smoke
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py clear
+py -3.12 scripts\run_http_mcp_relay_smoke.py --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
+```
+
+Expected:
+
+- observed tools: `echo_note`, `list_notes`
+- server ID: `fixture-http-notes-mcp`
+- alerts: `No alerts found.`
+
+Scope: this is local-only, experimental, MCP-specific HTTP relay Phase A for a POST JSON request/response subset routed through the AIWatch local HTTP MCP relay. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
+
 ## 5. Architecture explanation
 
-The MCP client launches or routes an MCP server through the AIWatch stdio wrapper/tap. That wrapper forwards stdio traffic, captures relevant MCP `tools/list` and `tools/call` activity, and posts normalized events into the FastAPI backend. The backend writes sanitized events into SQLite, updates the MCP tool registry and history, runs deterministic rules, and exposes results to the CLI and dashboard.
+The MCP client launches or routes an MCP server through the AIWatch stdio wrapper/tap or local HTTP MCP relay. Those observation paths capture relevant MCP `tools/list` and `tools/call` activity and post normalized events into the FastAPI backend. The backend writes sanitized events into SQLite, updates the MCP tool registry and history, runs deterministic rules, and exposes results to the CLI and dashboard.
 
 In plain English:
 
 - MCP client: the thing using tools
-- AIWatch wrapper/tap: the local observation point on stdio MCP traffic
-- MCP server: the tool provider behind the wrapper
+- AIWatch stdio wrapper/tap: the local observation point on stdio MCP traffic
+- AIWatch local HTTP MCP relay: the experimental local-only POST JSON MCP relay Phase A observation point
+- MCP server: the tool provider behind the AIWatch observation path
 - FastAPI backend: the ingest and query surface
 - SQLite store: the local event, alert, and registry database
 - registry/history: current tool fingerprints plus observation trail
@@ -205,11 +224,12 @@ Does not catch:
 
 ## 7. Proof points
 
-- `pytest`: `113 passed`
+- `pytest`: `130 passed`
 - `eval`: `39/39`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke
 - two real MCP package smokes
+- local HTTP POST JSON MCP relay smoke
 - canonical ingest audit
 - rollback tests
 - redaction regressions
@@ -238,7 +258,7 @@ No. It does not observe shell commands or file edits outside routed MCP traffic.
 
 ### Is it production-ready?
 
-No. It is a local demo-ready MCP wrapper and backend, not a universal production MCP proxy.
+No. It is a local demo-ready MCP wrapper, experimental local HTTP MCP relay, and backend, not a universal production MCP proxy.
 
 ### Does it block attacks?
 
@@ -258,7 +278,7 @@ Model guardrails do not give you a local registry, fingerprint history, determin
 
 ### What is novel?
 
-The combination of wrapper-based MCP observation, fingerprinted tool registry/history, deterministic MCP integrity rules, and tested redaction-before-persistence on canonical ingest paths.
+The combination of MCP observation through the stdio wrapper or local HTTP MCP relay, fingerprinted tool registry/history, deterministic MCP integrity rules, and tested redaction-before-persistence on canonical ingest paths.
 
 ### What happens if traffic bypasses AIWatch?
 
@@ -278,7 +298,7 @@ It proves that the pinned real local stdio MCP package paths can run through the
 
 ### What are the biggest limitations?
 
-The wrapper only sees routed MCP traffic, the package smoke depends on Node/npm/npx, the frontend R-MCP-005 demo is synthetic, and `R-MCP-005` does not prove total secret coverage.
+AIWatch only sees routed MCP traffic, the package smoke depends on Node/npm/npx, the HTTP relay Phase A path is only a local POST JSON MCP request/response subset, the frontend R-MCP-005 demo is synthetic, and `R-MCP-005` does not prove total secret coverage.
 
 ## 9. Caveats / non-goals
 
@@ -289,6 +309,7 @@ The wrapper only sees routed MCP traffic, the package smoke depends on Node/npm/
 - no arbitrary laptop monitoring
 - no guaranteed all-secret detection
 - no universal production MCP proxy claim
+- no full Streamable HTTP, SSE, GET stream handling, generic HTTP proxy, or production-ready proxying claim
 - real package smoke requires Node/npm/npx on PATH and may download the pinned package on first run
 - backend must already be running before seed and smoke commands
 - frontend `Trigger R-MCP-005 Demo` is synthetic
@@ -296,7 +317,7 @@ The wrapper only sees routed MCP traffic, the package smoke depends on Node/npm/
 ## 10. Future work
 
 - broader MCP server compatibility testing
-- HTTP/SSE MCP support
+- full Streamable HTTP/SSE MCP support
 - richer eval corpus
 - optional blocking policy after a measured false-positive rate
 - packaging and install polish

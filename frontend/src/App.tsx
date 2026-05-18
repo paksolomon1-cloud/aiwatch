@@ -890,7 +890,7 @@ function App() {
         <section className="panel methodology-panel">
           <span className="panel-label">Methodology</span>
           <p className="muted-copy small-copy">
-            AIWatch observes MCP traffic routed through the AIWatch wrapper.
+            AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
           </p>
           <p className="muted-copy small-copy">
             It captures MCP `tools/list` and `tools/call` traffic, normalizes tools into fingerprints,
@@ -906,7 +906,7 @@ function App() {
           <span className="panel-label">Current proof points</span>
           <div className="proof-grid">
             <div>
-              <strong>113</strong>
+              <strong>130</strong>
               <span>tests passing</span>
             </div>
             <div>
@@ -1649,7 +1649,7 @@ function App() {
           <p className="eyebrow">AIWatch dashboard</p>
           <h1>MCP Tool Security Monitor</h1>
           <p className="hero-copy">
-            AIWatch observes MCP traffic routed through the AIWatch wrapper.
+            AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
           </p>
           <p className="hero-copy hero-copy-secondary">
             It tracks tool definitions, fingerprint changes, shadowing, poisoned descriptions, and

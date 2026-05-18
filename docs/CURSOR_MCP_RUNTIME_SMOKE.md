@@ -179,4 +179,4 @@ Success output should include:
 - This does not observe Cursor shell commands.
 - This does not observe Cursor file edits.
 - This does not hook Cursor internals.
-- This does not add HTTP/SSE MCP support.
+- This does not add full Streamable HTTP/SSE MCP support.

@@ -1,6 +1,6 @@
 # Threat Model
 
-AIWatch v1 is scoped to MCP observability and integrity for traffic routed through the AIWatch wrapper.
+AIWatch v1 is scoped to MCP observability and integrity for traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.
 
 ## Protected Assets
 
@@ -15,10 +15,12 @@ AIWatch v1 is scoped to MCP observability and integrity for traffic routed throu
 The primary trust boundary is:
 
 ```text
-MCP client -> AIWatch wrapper/tap -> MCP server
+MCP client -> AIWatch stdio wrapper/tap or local HTTP MCP relay -> MCP server
 ```
 
-AIWatch can observe MCP traffic only when the MCP client is configured to launch or route the MCP server through the AIWatch wrapper/tap path.
+AIWatch can observe MCP traffic only when the MCP client is configured to launch or route the MCP server through the AIWatch stdio wrapper/tap path or local HTTP MCP relay.
+
+The local HTTP MCP relay Phase A path is local-only, experimental, MCP-specific, and limited to a POST JSON request/response subset. It is not full Streamable HTTP support, SSE support, GET stream handling, a generic HTTP proxy, or production-ready proxying.
 
 Real ingestion paths use the canonical ingest function. Known detected credential-shaped values are redacted before persistence on tested ingest paths, and the event row, MCP registry/history updates, and generated alerts are committed atomically for one ingested event.
 
@@ -53,6 +55,6 @@ Real ingestion paths use the canonical ingest function. Known detected credentia
 - traffic not routed through AIWatch
 - production auth or multi-tenant security
 - guaranteed prevention or blocking of all exfiltration
-- HTTP/SSE MCP proxying
+- full Streamable HTTP support, SSE support, GET stream handling, generic HTTP proxying, or production-ready proxying
 - ML-based detection
 - SIEM or enterprise export workflows
