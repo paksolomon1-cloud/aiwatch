@@ -183,7 +183,7 @@ AIWatch provides a local trust layer for routed MCP agents: it observes tool tra
 
 ### Seed core demo
 
-1. Click `Seed Demo`.
+1. Click `Seed Core Audit`.
 2. Say:
 
 `This first pass shows the alert pipeline with a small legacy demo set, but the product center is MCP observability and integrity.`
@@ -200,7 +200,7 @@ AIWatch provides a local trust layer for routed MCP agents: it observes tool tra
 
 ### Seed extended MCP registry demo
 
-1. Click `Seed MCP Registry Demo`.
+1. Click `Seed Tool Registry Audit`.
 2. Confirm:
 
 `Extended seed expected state: 8 events / 10 alerts.`
@@ -220,7 +220,7 @@ AIWatch provides a local trust layer for routed MCP agents: it observes tool tra
 
 ### Trigger R-MCP-005 demo
 
-1. Click `Trigger R-MCP-005 Demo`.
+1. Click `Trigger Redacted Evidence`.
 2. Say this clearly:
 
 `This is a synthetic local MCP tools/call fixture posted to the backend so the dashboard can show redacted evidence. It is not itself a live client capture proof.`
@@ -301,7 +301,7 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 Expected:
 
-- tests: `175 passed`
+- tests: `208 passed`
 - real MCP package smoke tool: `sequentialthinking` under `modelcontextprotocol-sequential-thinking`
 - second real MCP package smoke tools: memory tools under `modelcontextprotocol-memory`
 - real MCP package smoke alerts: `No alerts found.`
@@ -382,7 +382,7 @@ Does not catch:
 
 ## 8. Proof points
 
-- `pytest`: `175 passed`
+- `pytest`: `208 passed`
 - `eval`: `43/43`
 - fixture stdio smoke
 - Claude Code stdio MCP smoke
@@ -480,7 +480,7 @@ AIWatch only sees routed MCP traffic, the package smoke depends on Node/npm/npx,
 - no full Streamable HTTP, SSE, GET stream handling, generic HTTP proxy, or production-grade proxying claim
 - real package smoke requires Node/npm/npx on PATH and may download the pinned package on first run
 - backend must already be running before seed and smoke commands
-- frontend `Trigger R-MCP-005 Demo` is synthetic
+- frontend `Trigger Redacted Evidence` is synthetic
 
 ## 11. Future work
 

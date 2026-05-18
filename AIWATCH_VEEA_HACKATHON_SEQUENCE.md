@@ -30,7 +30,7 @@ AIWatch does not currently claim:
 
 ## Current Validated Proof State
 
-- Backend tests: `175 passed`
+- Backend tests: `208 passed`
 - Eval: `43/43`
 - Frontend build passes
 - Stdio wrapper smoke works

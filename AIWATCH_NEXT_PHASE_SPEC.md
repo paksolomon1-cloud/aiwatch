@@ -14,7 +14,7 @@ No future task should broaden AIWatch's claim without first updating this spec.
   - initial demo-ready checkpoint
   - generated artifact ignore cleanup
   - UI/layout/R-MCP-005 collapse/root wording fixes
-- `pytest`: `175 passed`
+- `pytest`: `208 passed`
 - `eval`: `43/43`
 - Frontend build passes.
 - Fixture stdio smoke works.
@@ -271,7 +271,7 @@ Does not detect:
 
 Demo evidence:
 
-- Frontend `Trigger R-MCP-005 Demo` posts a synthetic local MCP `tools/call` fixture so the dashboard can show redacted evidence.
+- Frontend `Trigger Redacted Evidence` posts a synthetic local MCP `tools/call` fixture so the dashboard can show redacted evidence.
 - This demo is not a live client capture proof.
 
 Eval coverage notes:
@@ -289,7 +289,7 @@ Required redaction statement:
 
 | Proof point | Current result |
 | --- | --- |
-| Backend tests | `175 passed` |
+| Backend tests | `208 passed` |
 | Eval | `43/43` |
 | Fixture stdio smoke | Works |
 | Claude Code stdio MCP smoke | Works |

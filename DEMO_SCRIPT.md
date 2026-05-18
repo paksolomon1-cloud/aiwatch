@@ -38,10 +38,10 @@ npm run dev
 
 ### Dashboard Flow
 
-- Click **Seed Demo**.
+- Click **Seed Core Audit**.
 - Explain the legacy/demo coding-agent alert briefly.
 - Confirm the core seed remains `5 events / 7 alerts`.
-- Click **Seed MCP Registry Demo**.
+- Click **Seed Tool Registry Audit**.
 - Confirm the extended seed remains `8 events / 10 alerts`.
 - Open **Tools / Registry**.
 - Show the clean `search_notes` baseline on `notes-mcp`.
@@ -113,7 +113,7 @@ py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 
 ### R-MCP-005 Credential Parameter Demo
 
-Use the dashboard **Trigger R-MCP-005 Demo** control to post one MCP `tools/call` event with a fake credential-shaped value. This is separate from the seed buttons so the core and extended seed counts stay unchanged.
+Use the dashboard **Trigger Redacted Evidence** control to post one MCP `tools/call` event with a fake credential-shaped value. This is separate from the seed buttons so the core and extended seed counts stay unchanged.
 
 Key message:
 
@@ -184,7 +184,7 @@ Key message:
 - missing session replay returns `404`
 - React dashboard
 - deterministic local eval harness
-- 175 pytest passing
+- 208 passed
 - 43/43 eval passing
 
 ## Claims Not To Make

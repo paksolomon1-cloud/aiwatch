@@ -53,7 +53,7 @@ Cleared AIWatch local database.
 
 ### 4. Seed Core Demo
 
-In the dashboard, click **Seed Demo**.
+In the dashboard, click **Seed Core Audit**.
 
 Expected summary:
 
@@ -73,7 +73,7 @@ Expected rules include `R-MCP-001` plus the legacy/demo coding-agent rules used 
 
 ### 6. Seed Extended MCP Registry Demo
 
-In the dashboard, click **Seed MCP Registry Demo**.
+In the dashboard, click **Seed Tool Registry Audit**.
 
 Expected summary:
 
@@ -97,7 +97,7 @@ Expected registry story:
 
 ### 8. Trigger R-MCP-005 Demo
 
-In the dashboard, click **Trigger R-MCP-005 Demo**.
+In the dashboard, click **Trigger Redacted Evidence**.
 
 This posts one MCP `tools/call` event with a fake credential-shaped value. It is separate from seed buttons so the seed counts above stay stable.
 
@@ -374,7 +374,7 @@ py -3.12 eval\run_eval.py
 Current expected results:
 
 ```text
-pytest: 175 passed
+pytest: 208 passed
 eval: 43/43 passed
 false positives: none
 false negatives: none
