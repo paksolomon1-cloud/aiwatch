@@ -84,9 +84,9 @@ Phase 3 local ingestion: AIWatch can ingest Lobster Trap JSONL audit logs into a
 
 ### Show local unified audit
 
-1. In the backend directory, ingest the bundled Lobster Trap sample:
+1. In the backend directory, seed the full unified audit demo with the safe helper:
 
-`py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330`
+`py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330`
 
 2. Open the `Unified Audit` tab.
 3. Point to the local risk summary and cross-layer grouping.
@@ -113,36 +113,19 @@ $env:AIWATCH_DEV_MODE="true"
 py -3.12 -m uvicorn app.main:app --reload --port 7330
 ```
 
-### Clear
+### Unified seed
 
 ```powershell
 cd C:\Users\pakso\Desktop\aiwatch\backend
-py -3.12 scripts\aiwatch.py clear
-```
-
-### Core seed
-
-```powershell
-py -3.12 scripts\aiwatch.py demo-seed --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
 py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
 py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
 ```
 
 Expected:
 
-- core seed: `5 events / 7 alerts`
-
-### Extended seed
-
-```powershell
-py -3.12 scripts\aiwatch.py demo-seed --extended --backend-url http://127.0.0.1:7330
-py -3.12 scripts\aiwatch.py tools --backend-url http://127.0.0.1:7330
-py -3.12 scripts\aiwatch.py alerts --backend-url http://127.0.0.1:7330
-```
-
-Expected:
-
-- extended seed: `8 events / 10 alerts`
+- unified helper sequence: clear local AIWatch database, seed extended AIWatch demo data, ingest the bundled Lobster Trap audit fixture
+- output includes `Lobster Trap records ingested: N`
 
 ### Run eval
 

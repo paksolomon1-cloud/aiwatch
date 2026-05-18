@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.cli import main as cli_main
+from app.cli import build_parser, main as cli_main
 
 
 def _secret(*parts: str) -> str:
@@ -135,6 +135,135 @@ def test_ingest_demo_lobstertrap_audit_cli_posts_bundled_fixture(monkeypatch, ca
         "lt-demo-req-review-001",
     ]
     assert "Ingested 3 Lobster Trap audit records; rejected 0; malformed lines 0; stored IDs [1, 2, 3]." in captured.out
+
+
+def test_demo_seed_unified_clears_seeds_before_lobstertrap_ingest(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "lobstertrap-audit-sample.jsonl"
+    audit_path.write_text('{"request_id":"req-unified-1","action":"DENY"}\n', encoding="utf-8")
+    order: list[str] = []
+
+    def fake_clear_db():
+        order.append("clear")
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        if path.startswith("/v1/dev/seed-demo"):
+            order.append("seed")
+            return {
+                "status": "ok",
+                "events_created": 8,
+                "alerts_created": 10,
+                "tools_observed": 4,
+                "items": [],
+            }
+        if path == "/v1/integrations/lobstertrap/audit":
+            order.append("ingest")
+            return {"accepted": 1, "rejected": 0, "stored_record_ids": [101]}
+        if path == "/v1/audit/summary":
+            order.append("summary")
+            return {
+                "aiwatch_mcp_records": 8,
+                "lobstertrap_records": 1,
+                "total_records": 9,
+            }
+        raise AssertionError(f"unexpected path: {path}")
+
+    monkeypatch.setattr("app.cli.DEMO_LOBSTERTRAP_AUDIT_PATH", audit_path)
+    monkeypatch.setattr("app.cli.clear_db", fake_clear_db)
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["demo-seed-unified", "--extended", "--backend-url", "http://127.0.0.1:7330"]) == 0
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert order == ["clear", "seed", "ingest", "summary"]
+    assert "AIWatch seed result: 8 events; 10 alerts; 4 tools observed." in captured.out
+    assert "Lobster Trap records ingested: 1" in captured.out
+    assert "aiwatch_mcp_records=8; lobstertrap_records=1; total_records=9" in captured.out
+    assert "deployed Veea infrastructure" not in output
+    assert "actual TerraFabric control plane" not in output
+
+
+def test_demo_seed_unified_reports_malformed_lobstertrap_fixture(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    audit_path = tmp_path / "bad-lobstertrap-audit.jsonl"
+    audit_path.write_text("{not-json\n", encoding="utf-8")
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        if path.startswith("/v1/dev/seed-demo"):
+            return {
+                "status": "ok",
+                "events_created": 5,
+                "alerts_created": 7,
+                "tools_observed": 2,
+                "items": [],
+            }
+        raise AssertionError(f"unexpected path after malformed fixture: {path}")
+
+    monkeypatch.setattr("app.cli.DEMO_LOBSTERTRAP_AUDIT_PATH", audit_path)
+    monkeypatch.setattr("app.cli.clear_db", lambda: None)
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["demo-seed-unified", "--backend-url", "http://127.0.0.1:7330"]) == 1
+
+    captured = capsys.readouterr()
+    assert "Lobster Trap fixture ingestion step failed" in captured.err
+    assert "malformed Lobster Trap fixture JSONL line 1" in captured.err
+
+
+def test_demo_seed_unified_reports_missing_lobstertrap_fixture(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    missing_path = tmp_path / "missing-lobstertrap-audit.jsonl"
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        if path.startswith("/v1/dev/seed-demo"):
+            return {
+                "status": "ok",
+                "events_created": 5,
+                "alerts_created": 7,
+                "tools_observed": 2,
+                "items": [],
+            }
+        raise AssertionError(f"unexpected path after missing fixture: {path}")
+
+    monkeypatch.setattr("app.cli.DEMO_LOBSTERTRAP_AUDIT_PATH", missing_path)
+    monkeypatch.setattr("app.cli.clear_db", lambda: None)
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["demo-seed-unified", "--backend-url", "http://127.0.0.1:7330"]) == 1
+
+    captured = capsys.readouterr()
+    assert "Lobster Trap fixture ingestion step failed" in captured.err
+    assert "Lobster Trap fixture/audit file not found" in captured.err
+
+
+def test_demo_seed_unified_help_and_touched_docs_avoid_live_deployment_claims() -> None:
+    root_dir = Path(__file__).resolve().parents[2]
+    checked_text = "\n".join(
+        [
+            build_parser().format_help(),
+            (root_dir / "DEMO_RUNBOOK.md").read_text(encoding="utf-8"),
+            (root_dir / "AIWATCH_FINAL_DEMO_PACKET.md").read_text(encoding="utf-8"),
+            (root_dir / "docs" / "LOBSTERTRAP_AIWATCH_COMPANION.md").read_text(encoding="utf-8"),
+        ]
+    )
+
+    forbidden_live_deployment_claims = [
+        "live Veea platform integration",
+        "deployed Veea infrastructure",
+        "actual TerraFabric control plane",
+    ]
+    for phrase in forbidden_live_deployment_claims:
+        assert phrase not in checked_text
 
 
 def test_lobstertrap_status_cli_prints_backend_status(monkeypatch, capsys) -> None:

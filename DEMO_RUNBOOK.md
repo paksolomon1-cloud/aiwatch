@@ -88,8 +88,17 @@ Use this as a local layered audit story. It is local Lobster Trap audit ingestio
 Say:
 
 ```text
-Lobster Trap writes prompt/response-layer audit logs; AIWatch observes routed MCP tool traffic. AIWatch can ingest a local Lobster Trap audit JSONL file so the dashboard shows both layers in one local audit timeline.
+AIWatch observes routed MCP tool traffic, ingests Lobster Trap prompt/response audit logs locally, and displays both layers in a unified local audit timeline with correlation and risk context.
 ```
+
+For the deterministic full unified audit demo, use the safe one-command helper. It clears the local AIWatch database, seeds the extended AIWatch MCP demo, then ingests the bundled Lobster Trap sample in the correct order:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+Do not run the bundled Lobster Trap ingest before `demo-seed --extended`; the demo seed clears local data and would remove those records.
 
 Verified local Lobster Trap commands after building `C:\Users\pakso\lobstertrap\lobstertrap.exe`:
 
@@ -137,10 +146,10 @@ Say:
 This unified file is local export/merge interop. Lobster Trap remains the prompt/response inspection layer; AIWatch remains the routed MCP tool layer. This file path is separate from the local live ingestion path below; it is not forwarding and not a shared event bus.
 ```
 
-For a deterministic demo fixture, ingest the bundled Lobster Trap sample into the local AIWatch backend:
+For a deterministic demo fixture, use the unified helper instead of manually ordering clear, seed, and Lobster Trap ingest:
 
 ```powershell
-py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
 ```
 
 To ingest a real local Lobster Trap audit file into the local AIWatch backend and show it in the dashboard's Unified Audit tab:

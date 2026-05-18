@@ -46,6 +46,18 @@ class DoctorServerResult:
     advice: str
 
 
+@dataclass(frozen=True)
+class LobsterTrapIngestResult:
+    accepted: int
+    rejected: int
+    malformed: int
+    stored_record_ids: list[int]
+
+
+class CliStepError(Exception):
+    """Raised when a multi-step CLI command fails at a named step."""
+
+
 def request_json(
     path: str,
     *,
@@ -322,6 +334,14 @@ def build_parser() -> argparse.ArgumentParser:
     demo_seed_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     demo_seed_parser.set_defaults(handler=handle_demo_seed)
 
+    demo_seed_unified_parser = subparsers.add_parser(
+        "demo-seed-unified",
+        help="Clear, seed AIWatch demo data, and ingest the bundled Lobster Trap audit fixture.",
+    )
+    demo_seed_unified_parser.add_argument("--extended", action="store_true", help="Seed the extended MCP registry demo.")
+    demo_seed_unified_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    demo_seed_unified_parser.set_defaults(handler=handle_demo_seed_unified)
+
     tap_demo_parser = subparsers.add_parser("tap-demo", help="Run the stdio tap demo.")
     tap_demo_parser.set_defaults(handler=handle_tap_demo)
 
@@ -407,14 +427,21 @@ def _format_seed_result(item: dict[str, object]) -> str:
     return f"[ok] {name}: event_id={event_id}, {alerts_created} {alert_label}{suffix}"
 
 
+def seed_demo_backend(*, backend_url: str, extended: bool) -> dict[str, object]:
+    response_data = request_json(
+        f"/v1/dev/seed-demo?clear=true&extended={'true' if extended else 'false'}",
+        backend_url=backend_url,
+        method="POST",
+        body={},
+    )
+    if not isinstance(response_data, dict):
+        raise CliStepError("AIWatch demo seed step failed: backend returned a non-object response.")
+    return response_data
+
+
 def handle_demo_seed(args: argparse.Namespace) -> int:
     try:
-        response_data = request_json(
-            f"/v1/dev/seed-demo?clear=true&extended={'true' if args.extended else 'false'}",
-            backend_url=args.backend_url,
-            method="POST",
-            body={},
-        )
+        response_data = seed_demo_backend(backend_url=args.backend_url, extended=args.extended)
     except urllib.error.HTTPError as error:
         if error.code == 404:
             print(DEV_ENDPOINTS_DISABLED_MESSAGE)
@@ -423,11 +450,80 @@ def handle_demo_seed(args: argparse.Namespace) -> int:
     except urllib.error.URLError:
         print(BACKEND_DOWN_MESSAGE)
         return 1
+    except CliStepError as error:
+        print(str(error))
+        return 1
 
     for item in response_data.get("items", []):
         if isinstance(item, dict):
             print(_format_seed_result(item))
 
+    return 0
+
+
+def _seed_result_summary(response_data: dict[str, object]) -> str:
+    events_created = int(response_data.get("events_created", 0))
+    alerts_created = int(response_data.get("alerts_created", 0))
+    tools_observed = int(response_data.get("tools_observed", 0))
+    return f"{events_created} events; {alerts_created} alerts; {tools_observed} tools observed"
+
+
+def _fetch_audit_summary(*, backend_url: str) -> dict[str, object] | None:
+    try:
+        summary = request_json("/v1/audit/summary", backend_url=backend_url)
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return None
+    return summary if isinstance(summary, dict) else None
+
+
+def handle_demo_seed_unified(args: argparse.Namespace) -> int:
+    try:
+        clear_db()
+    except Exception as error:
+        print(f"Clear step failed: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        seed_response = seed_demo_backend(backend_url=args.backend_url, extended=args.extended)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            print(f"AIWatch demo seed step failed: {DEV_ENDPOINTS_DISABLED_MESSAGE}", file=sys.stderr)
+            return 1
+        print(f"AIWatch demo seed step failed: HTTP {error.code}", file=sys.stderr)
+        return 1
+    except urllib.error.URLError:
+        print(f"AIWatch demo seed step failed: {BACKEND_DOWN_MESSAGE}", file=sys.stderr)
+        return 1
+    except CliStepError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+    try:
+        ingest_result = ingest_lobstertrap_audit_file(
+            DEMO_LOBSTERTRAP_AUDIT_PATH,
+            backend_url=args.backend_url,
+            follow=False,
+            strict_jsonl=True,
+            step_name="Lobster Trap fixture ingestion step",
+        )
+    except CliStepError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+    summary = _fetch_audit_summary(backend_url=args.backend_url)
+
+    print("Unified demo seed complete.")
+    print(f"AIWatch seed result: {_seed_result_summary(seed_response)}.")
+    print(f"Lobster Trap records ingested: {ingest_result.accepted}")
+    if summary is not None:
+        print(
+            "Final audit summary: "
+            f"aiwatch_mcp_records={summary.get('aiwatch_mcp_records', 'unknown')}; "
+            f"lobstertrap_records={summary.get('lobstertrap_records', 'unknown')}; "
+            f"total_records={summary.get('total_records', 'unknown')}."
+        )
+    else:
+        print("Final audit summary: unavailable.")
     return 0
 
 
@@ -569,15 +665,21 @@ def _iter_jsonl_lines(input_path: Path, *, follow: bool) -> Iterator[tuple[int, 
             time.sleep(0.25)
 
 
-def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
-    if not _is_local_backend_url(args.backend_url):
-        print("ingest-lobstertrap-audit only posts to a local AIWatch backend URL.", file=sys.stderr)
-        return 2
+def ingest_lobstertrap_audit_file(
+    input_path: Path,
+    *,
+    backend_url: str,
+    follow: bool,
+    strict_jsonl: bool = False,
+    step_name: str = "Lobster Trap audit ingestion step",
+) -> LobsterTrapIngestResult:
+    if not _is_local_backend_url(backend_url):
+        raise CliStepError(
+            f"{step_name} failed: ingest-lobstertrap-audit only posts to a local AIWatch backend URL."
+        )
 
-    input_path = Path(args.file)
     if not input_path.exists():
-        print(f"Lobster Trap audit file not found: {input_path}", file=sys.stderr)
-        return 2
+        raise CliStepError(f"{step_name} failed: Lobster Trap fixture/audit file not found: {input_path}")
 
     accepted = 0
     rejected = 0
@@ -585,7 +687,7 @@ def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
     stored_record_ids: list[int] = []
 
     try:
-        for line_number, raw_line in _iter_jsonl_lines(input_path, follow=args.follow):
+        for line_number, raw_line in _iter_jsonl_lines(input_path, follow=follow):
             line = raw_line.strip()
             if not line:
                 continue
@@ -594,30 +696,38 @@ def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
                 payload = json.loads(line)
             except json.JSONDecodeError as error:
                 malformed += 1
+                if strict_jsonl:
+                    raise CliStepError(
+                        f"{step_name} failed: malformed Lobster Trap fixture JSONL line "
+                        f"{line_number}: {error.msg}"
+                    ) from None
                 print(f"Skipping malformed JSONL line {line_number}: {error.msg}", file=sys.stderr)
                 continue
 
             if not isinstance(payload, dict):
                 malformed += 1
+                if strict_jsonl:
+                    raise CliStepError(
+                        f"{step_name} failed: malformed Lobster Trap fixture JSONL line "
+                        f"{line_number}: expected JSON object"
+                    )
                 print(f"Skipping JSONL line {line_number}: expected JSON object", file=sys.stderr)
                 continue
 
             try:
                 response_data = request_json(
                     "/v1/integrations/lobstertrap/audit",
-                    backend_url=args.backend_url,
+                    backend_url=backend_url,
                     method="POST",
                     body=payload,
                 )
             except urllib.error.HTTPError as error:
-                print(
-                    f"AIWatch backend rejected Lobster Trap audit line {line_number}: HTTP {error.code}",
-                    file=sys.stderr,
-                )
-                return 1
+                raise CliStepError(
+                    f"{step_name} failed: AIWatch backend rejected Lobster Trap audit line "
+                    f"{line_number}: HTTP {error.code}"
+                ) from None
             except urllib.error.URLError:
-                print(BACKEND_DOWN_MESSAGE)
-                return 1
+                raise CliStepError(f"{step_name} failed: {BACKEND_DOWN_MESSAGE}") from None
 
             if isinstance(response_data, dict):
                 accepted += int(response_data.get("accepted", 0))
@@ -628,11 +738,30 @@ def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         print("Stopped following Lobster Trap audit file.", file=sys.stderr)
 
+    return LobsterTrapIngestResult(
+        accepted=accepted,
+        rejected=rejected,
+        malformed=malformed,
+        stored_record_ids=stored_record_ids,
+    )
+
+
+def handle_ingest_lobstertrap_audit(args: argparse.Namespace) -> int:
+    try:
+        ingest_result = ingest_lobstertrap_audit_file(
+            Path(args.file),
+            backend_url=args.backend_url,
+            follow=args.follow,
+        )
+    except CliStepError as error:
+        print(str(error), file=sys.stderr)
+        return 2 if "only posts to a local AIWatch backend URL" in str(error) or "not found" in str(error) else 1
+
     print(
         "Ingested "
-        f"{accepted} Lobster Trap audit records; "
-        f"rejected {rejected}; malformed lines {malformed}; "
-        f"stored IDs {stored_record_ids}."
+        f"{ingest_result.accepted} Lobster Trap audit records; "
+        f"rejected {ingest_result.rejected}; malformed lines {ingest_result.malformed}; "
+        f"stored IDs {ingest_result.stored_record_ids}."
     )
     return 0
 

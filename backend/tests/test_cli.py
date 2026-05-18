@@ -27,6 +27,16 @@ def test_parser_recognizes_demo_seed_and_extended_flag() -> None:
     assert args.backend_url == "http://localhost:9000"
 
 
+def test_parser_recognizes_demo_seed_unified_and_extended_flag() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["demo-seed-unified", "--extended", "--backend-url", "http://localhost:9000"])
+
+    assert args.command == "demo-seed-unified"
+    assert args.extended is True
+    assert args.backend_url == "http://localhost:9000"
+
+
 def test_parser_recognizes_other_commands() -> None:
     parser = build_parser()
 
@@ -46,6 +56,7 @@ def test_help_text_lists_supported_commands() -> None:
     help_text = build_parser().format_help()
 
     assert "demo-seed" in help_text
+    assert "demo-seed-unified" in help_text
     assert "clear" in help_text
     assert "tap-demo" in help_text
     assert "eval" in help_text

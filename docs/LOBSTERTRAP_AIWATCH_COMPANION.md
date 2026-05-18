@@ -85,7 +85,7 @@ This is a local companion integration path, not TerraFabric deployment or a Veea
 - Lobster Trap can write JSONL audit logs that AIWatch can ingest into its local SQLite audit store.
 - The AIWatch dashboard has a local unified audit view for AIWatch MCP-layer records and ingested Lobster Trap prompt/response-layer records.
 - `GET /v1/audit/summary` returns local counts for total records, source/layer breakdowns, deny/review/quarantine records, redacted records, and the most recent timestamp.
-- There is no shared event bus, shared policy engine, deployed Veea infrastructure, or TerraFabric control plane.
+- There is no shared event bus, shared policy engine, Veea-hosted infrastructure path, or TerraFabric control plane.
 - AIWatch has an export-only Veea audit JSONL envelope for stored MCP-layer alerts and MCP-layer timeline records.
 - AIWatch has a local file-based merge command for combining an AIWatch MCP audit timeline JSONL file with a Lobster Trap prompt/response audit JSONL file.
 - AIWatch has a local ingestion command for posting Lobster Trap JSONL audit lines into the AIWatch backend.
@@ -276,6 +276,15 @@ Phase 2 limits:
 
 AIWatch can ingest a local Lobster Trap JSONL audit file into the AIWatch backend and show those normalized records beside AIWatch MCP-layer records in the dashboard's unified audit timeline.
 
+For the deterministic full unified audit demo, prefer the safe helper. It clears the local AIWatch database, seeds the extended AIWatch MCP demo, then ingests the bundled Lobster Trap sample in the correct order:
+
+```powershell
+cd C:\Users\pakso\Desktop\aiwatch\backend
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
+```
+
+AIWatch observes routed MCP tool traffic, ingests Lobster Trap prompt/response audit logs locally, and displays both layers in a unified local audit timeline with correlation and risk context.
+
 Start AIWatch, then ingest an existing Lobster Trap audit log:
 
 ```powershell
@@ -283,10 +292,10 @@ cd C:\Users\pakso\Desktop\aiwatch\backend
 py -3.12 scripts\aiwatch.py ingest-lobstertrap-audit --file C:\Users\pakso\lobstertrap\lobstertrap-audit.jsonl --backend-url http://127.0.0.1:7330
 ```
 
-For a deterministic demo without requiring Lobster Trap to be running, ingest the bundled sample:
+For a deterministic demo without requiring Lobster Trap to be running, use the unified helper instead of manually ordering clear, seed, and bundled Lobster Trap ingest:
 
 ```powershell
-py -3.12 scripts\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330
+py -3.12 scripts\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330
 ```
 
 To keep reading appended audit lines during a local demo:
