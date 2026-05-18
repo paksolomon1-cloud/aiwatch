@@ -164,6 +164,7 @@ py -3.12 eval\run_eval.py
 - [Claude Code MCP wrapper docs](docs/CLAUDE_CODE_MCP_WRAPPER.md)
 - [Cursor MCP smoke exploration](docs/CURSOR_MCP_RUNTIME_SMOKE.md)
 - [HTTP MCP relay Phase A](docs/HTTP_MCP_RELAY_PHASE_A.md)
+- [Veea Lobster Trap companion demo](docs/LOBSTERTRAP_AIWATCH_COMPANION.md)
 - [AIWatch doctor docs](docs/AIWATCH_DOCTOR.md)
 - [MCP credential parameter detection](docs/MCP_CREDENTIAL_PARAMETER_DETECTION.md)
 - [Threat model](THREAT_MODEL.md)

@@ -12,6 +12,8 @@ MCP gives agents tools, and tool definitions plus tool calls create a real trust
 
 The demo shows current AIWatch proof, not the full future Veea product. Future Veea direction may include additional adapters, richer policy controls, runtime risk scoring, optional blocking, and broader agent/tool compatibility.
 
+Optional companion framing: Veea Lobster Trap can be shown separately as the prompt/response-layer policy proxy for OpenAI-compatible LLM traffic, while AIWatch remains the MCP tool-layer proof point. Treat this as side-by-side layered runtime security unless a real bridge between the projects is implemented and verified.
+
 ## 3. 5-minute demo script
 
 ### Open dashboard
