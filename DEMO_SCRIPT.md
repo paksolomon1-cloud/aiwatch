@@ -1,5 +1,7 @@
 # AIWatch Demo Script
 
+For the single day-of-demo flow, use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md). This file remains supporting speaker copy.
+
 ## One-Sentence Pitch
 
 AIWatch is a local MCP observability and security layer. AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay, fingerprints tool definitions, and flags poisoned, changed, shadowed, or credential-shaped MCP tool-call parameters.

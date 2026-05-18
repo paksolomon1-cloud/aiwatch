@@ -1,5 +1,7 @@
 # AIWatch Final Demo Packet
 
+Use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) as the single day-of-demo source. This packet remains supporting reference material.
+
 ## 1. One-line thesis
 
 AIWatch is a local observability and integrity layer for MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay.

@@ -2,6 +2,8 @@
 
 AIWatch observes MCP traffic routed through the AIWatch stdio wrapper or local HTTP MCP relay. This checklist is for a clean local demo path, not a production deployment guide.
 
+For the single day-of-demo flow, use [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md).
+
 ## Prerequisites
 
 - Python 3.12 available as `py -3.12`

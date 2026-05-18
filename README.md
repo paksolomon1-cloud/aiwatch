@@ -147,6 +147,7 @@ py -3.12 eval\run_eval.py
 
 ## Documentation
 
+- [Day-of-demo runbook](DEMO_RUNBOOK.md)
 - [Reproducible demo checklist](QUICKSTART_DEMO.md)
 - [Demo script](DEMO_SCRIPT.md)
 - [Real MCP package smoke](REAL_MCP_PACKAGE_SMOKE.md)
