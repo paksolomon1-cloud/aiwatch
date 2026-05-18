@@ -53,8 +53,8 @@ interface ReplayLoadOptions {
   silent?: boolean
 }
 
-const DEMO_LOBSTERTRAP_INGEST_COMMAND =
-  'py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330'
+const DEMO_UNIFIED_SEED_COMMAND =
+  'py -3.12 scripts\\aiwatch.py demo-seed-unified --extended --backend-url http://127.0.0.1:7330'
 
 const severityOrder: Record<Severity, number> = {
   critical: 4,
@@ -1350,10 +1350,10 @@ function App() {
 
           <div className="audit-code-strip">
             <div>
-              <span>Demo ingestion</span>
-              <p className="muted-copy small-copy">Populates the local Lobster Trap side of Unified Audit.</p>
+              <span>Unified demo seed</span>
+              <p className="muted-copy small-copy">Seeds AIWatch MCP activity and bundled Lobster Trap audit records.</p>
             </div>
-            <code>{lobsterTrapStatus?.demo_ingest_command ?? DEMO_LOBSTERTRAP_INGEST_COMMAND}</code>
+            <code>{DEMO_UNIFIED_SEED_COMMAND}</code>
           </div>
 
           <div className="audit-summary-grid">
@@ -1449,7 +1449,7 @@ function App() {
 
           {auditTimeline.length === 0 ? (
             <p className="empty-state">
-              No unified audit records yet. Run <code>{DEMO_LOBSTERTRAP_INGEST_COMMAND}</code> or generate AIWatch MCP activity to populate this local timeline.
+              No unified audit records yet. Run <code>{DEMO_UNIFIED_SEED_COMMAND}</code> to populate this local timeline.
             </p>
           ) : (
             <div className="table-scroll">
