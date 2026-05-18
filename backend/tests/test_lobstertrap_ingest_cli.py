@@ -135,3 +135,57 @@ def test_ingest_demo_lobstertrap_audit_cli_posts_bundled_fixture(monkeypatch, ca
         "lt-demo-req-review-001",
     ]
     assert "Ingested 3 Lobster Trap audit records; rejected 0; malformed lines 0; stored IDs [1, 2, 3]." in captured.out
+
+
+def test_lobstertrap_status_cli_prints_backend_status(monkeypatch, capsys) -> None:
+    requested: list[dict[str, object]] = []
+
+    def fake_request_json(path, *, backend_url, method="GET", body=None):
+        requested.append(
+            {
+                "path": path,
+                "backend_url": backend_url,
+                "method": method,
+                "body": body,
+            }
+        )
+        return {
+            "source": "lobstertrap",
+            "configured": True,
+            "status": "active",
+            "total_records": 1,
+            "deny_count": 1,
+            "human_review_count": 0,
+            "quarantine_count": 0,
+            "allow_count": 0,
+            "redacted_count": 1,
+            "last_record_at": "2026-05-18T12:00:00Z",
+            "seconds_since_last_record": 1,
+            "last_decision": "DENY",
+            "last_rule_id": "block_prompt_injection",
+            "last_summary": "Lobster Trap prompt/response inspection",
+            "suggested_ingest_command": (
+                "py -3.12 scripts\\aiwatch.py ingest-lobstertrap-audit --file <jsonl> "
+                "--backend-url http://127.0.0.1:7330"
+            ),
+            "demo_ingest_command": (
+                "py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit "
+                "--backend-url http://127.0.0.1:7330"
+            ),
+        }
+
+    monkeypatch.setattr("app.cli.request_json", fake_request_json)
+
+    assert cli_main(["lobstertrap-status", "--backend-url", "http://127.0.0.1:7330"]) == 0
+
+    captured = capsys.readouterr()
+    assert requested == [
+        {
+            "path": "/v1/integrations/lobstertrap/status",
+            "backend_url": "http://127.0.0.1:7330",
+            "method": "GET",
+            "body": None,
+        }
+    ]
+    assert '"status": "active"' in captured.out
+    assert '"last_decision": "DENY"' in captured.out

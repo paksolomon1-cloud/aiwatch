@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -36,6 +37,14 @@ from app.veea_audit import build_veea_audit_timeline, lobstertrap_record_to_veea
 
 DEV_MODE_TRUTHY_VALUES = {"1", "true", "yes", "on"}
 MAX_EVENT_REQUEST_BODY_BYTES = 4 * 1024 * 1024
+LOBSTERTRAP_ACTIVE_THRESHOLD_SECONDS = 5 * 60
+LOBSTERTRAP_SUGGESTED_INGEST_COMMAND = (
+    "py -3.12 scripts\\aiwatch.py ingest-lobstertrap-audit --file <jsonl> "
+    "--backend-url http://127.0.0.1:7330"
+)
+LOBSTERTRAP_DEMO_INGEST_COMMAND = (
+    "py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit --backend-url http://127.0.0.1:7330"
+)
 
 
 @asynccontextmanager
@@ -174,6 +183,20 @@ def _audit_record_timestamp(record: dict[str, object]) -> str:
     return timestamp if isinstance(timestamp, str) else ""
 
 
+def _parse_audit_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _audit_record_tie_key(record: dict[str, object]) -> tuple[str, str, str, str]:
     stable_id = record.get("id") or record.get("request_id") or record.get("rule_id")
 
@@ -229,6 +252,57 @@ def _is_human_review_or_quarantine_record(record: dict[str, object]) -> bool:
     action = str(record.get("action") or "").upper()
     decision = str(record.get("decision") or "").lower()
     return action in {"HUMAN_REVIEW", "QUARANTINE"} or decision in {"review", "quarantine"}
+
+
+def _record_action(record: dict[str, object]) -> str:
+    return str(record.get("action") or "").upper()
+
+
+def _lobstertrap_status(records: list[dict[str, object]]) -> dict[str, object]:
+    lobstertrap_records = [record for record in records if record.get("source") == "lobstertrap"]
+    sorted_records = _sort_audit_timeline_desc(lobstertrap_records)
+    latest_record = sorted_records[0] if sorted_records else None
+    latest_record_at = latest_record.get("timestamp") if latest_record else None
+    latest_record_datetime = _parse_audit_datetime(latest_record_at)
+    seconds_since_last_record = (
+        max(0, int((datetime.now(timezone.utc) - latest_record_datetime).total_seconds()))
+        if latest_record_datetime is not None
+        else None
+    )
+
+    if not lobstertrap_records:
+        status = "no_records"
+    elif seconds_since_last_record is None:
+        status = "inactive"
+    elif seconds_since_last_record <= LOBSTERTRAP_ACTIVE_THRESHOLD_SECONDS:
+        status = "active"
+    else:
+        status = "stale"
+
+    response: dict[str, object] = {
+        "source": "lobstertrap",
+        "configured": bool(lobstertrap_records),
+        "status": status,
+        "total_records": len(lobstertrap_records),
+        "deny_count": sum(1 for record in lobstertrap_records if _record_action(record) == "DENY"),
+        "human_review_count": sum(
+            1 for record in lobstertrap_records if _record_action(record) == "HUMAN_REVIEW"
+        ),
+        "quarantine_count": sum(1 for record in lobstertrap_records if _record_action(record) == "QUARANTINE"),
+        "allow_count": sum(1 for record in lobstertrap_records if _record_action(record) == "ALLOW"),
+        "redacted_count": sum(1 for record in lobstertrap_records if record.get("redacted") is True),
+        "last_record_at": latest_record_at if isinstance(latest_record_at, str) else None,
+        "last_decision": latest_record.get("action") if latest_record else None,
+        "last_rule_id": latest_record.get("rule_id") if latest_record else None,
+        "last_summary": latest_record.get("summary") if latest_record else None,
+        "suggested_ingest_command": LOBSTERTRAP_SUGGESTED_INGEST_COMMAND,
+        "demo_ingest_command": LOBSTERTRAP_DEMO_INGEST_COMMAND,
+    }
+
+    if seconds_since_last_record is not None:
+        response["seconds_since_last_record"] = seconds_since_last_record
+
+    return response
 
 
 def _source_layer_breakdown(records: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -317,6 +391,11 @@ async def ingest_lobstertrap_audit(request: Request) -> dict[str, object]:
         "rejected": rejected,
         "stored_record_ids": stored_record_ids,
     }
+
+
+@app.get("/v1/integrations/lobstertrap/status")
+def read_lobstertrap_status() -> dict[str, object]:
+    return _lobstertrap_status(load_audit_records(limit=None))
 
 
 @app.get("/v1/events", response_model=list[AgentEvent])

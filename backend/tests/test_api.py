@@ -636,6 +636,156 @@ def test_lobstertrap_audit_ingest_stores_deny_record(monkeypatch, tmp_path: Path
     clear_db()
 
 
+def test_lobstertrap_status_returns_no_records_without_lobstertrap_audit(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        response = client.get("/v1/integrations/lobstertrap/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source": "lobstertrap",
+        "configured": False,
+        "status": "no_records",
+        "total_records": 0,
+        "deny_count": 0,
+        "human_review_count": 0,
+        "quarantine_count": 0,
+        "allow_count": 0,
+        "redacted_count": 0,
+        "last_record_at": None,
+        "last_decision": None,
+        "last_rule_id": None,
+        "last_summary": None,
+        "suggested_ingest_command": (
+            "py -3.12 scripts\\aiwatch.py ingest-lobstertrap-audit --file <jsonl> "
+            "--backend-url http://127.0.0.1:7330"
+        ),
+        "demo_ingest_command": (
+            "py -3.12 scripts\\aiwatch.py ingest-demo-lobstertrap-audit "
+            "--backend-url http://127.0.0.1:7330"
+        ),
+    }
+
+    clear_db()
+
+
+def test_lobstertrap_status_counts_actions_and_returns_latest_fields(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    active_timestamp = datetime.now(timezone.utc).isoformat()
+    raw_secret = _prompt_secret("Bearer ", "LOBSTERSTATUS", "1234567890", "ABCDEF")
+
+    with TestClient(app) as client:
+        ingest_response = client.post(
+            "/v1/integrations/lobstertrap/audit",
+            json={
+                "records": [
+                    _lobstertrap_audit_record(
+                        request_id="req-status-deny",
+                        timestamp="2026-05-18T12:00:00Z",
+                        action="DENY",
+                        rule_name="block_prompt_injection",
+                    ),
+                    _lobstertrap_audit_record(
+                        request_id="req-status-allow",
+                        timestamp="2026-05-18T12:01:00Z",
+                        action="ALLOW",
+                        rule_name="allow_prompt",
+                    ),
+                    _lobstertrap_audit_record(
+                        request_id="req-status-review",
+                        timestamp="2026-05-18T12:02:00Z",
+                        action="HUMAN_REVIEW",
+                        rule_name="review_sensitive_intent",
+                    ),
+                    _lobstertrap_audit_record(
+                        request_id="req-status-quarantine",
+                        timestamp=active_timestamp,
+                        action="QUARANTINE",
+                        rule_name="quarantine_prompt",
+                    )
+                    | {"prompt": raw_secret},
+                ]
+            },
+        )
+        status_response = client.get("/v1/integrations/lobstertrap/status")
+
+    assert ingest_response.status_code == 200
+    assert status_response.status_code == 200
+    status = status_response.json()
+    rendered_status = json.dumps(status, sort_keys=True)
+
+    assert status["source"] == "lobstertrap"
+    assert status["configured"] is True
+    assert status["status"] == "active"
+    assert status["total_records"] == 4
+    assert status["deny_count"] == 1
+    assert status["allow_count"] == 1
+    assert status["human_review_count"] == 1
+    assert status["quarantine_count"] == 1
+    assert status["redacted_count"] == 4
+    assert status["last_record_at"] == active_timestamp
+    assert status["seconds_since_last_record"] <= 300
+    assert status["last_decision"] == "QUARANTINE"
+    assert status["last_rule_id"] == "quarantine_prompt"
+    assert (
+        status["last_summary"]
+        == "Lobster Trap prompt/response inspection; direction=ingress; action=QUARANTINE; rule=quarantine_prompt"
+    )
+    assert raw_secret not in rendered_status
+
+    clear_db()
+
+
+def test_lobstertrap_status_returns_stale_for_old_lobstertrap_records(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+
+    with TestClient(app) as client:
+        client.post(
+            "/v1/integrations/lobstertrap/audit",
+            json=_lobstertrap_audit_record(timestamp="2000-01-01T00:00:00Z", action="ALLOW"),
+        )
+        response = client.get("/v1/integrations/lobstertrap/status")
+
+    assert response.status_code == 200
+    status = response.json()
+    assert status["status"] == "stale"
+    assert status["total_records"] == 1
+    assert status["allow_count"] == 1
+
+    clear_db()
+
+
+def test_lobstertrap_status_returns_inactive_when_lobstertrap_timestamp_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_test_db(monkeypatch, tmp_path)
+    record = _lobstertrap_audit_record(timestamp="2026-05-18T12:00:00Z", action="ALLOW")
+    record.pop("timestamp")
+
+    with TestClient(app) as client:
+        client.post("/v1/integrations/lobstertrap/audit", json=record)
+        response = client.get("/v1/integrations/lobstertrap/status")
+
+    assert response.status_code == 200
+    status = response.json()
+    assert status["status"] == "inactive"
+    assert "seconds_since_last_record" not in status
+    assert status["last_record_at"] is None
+
+    clear_db()
+
+
 def test_lobstertrap_audit_ingest_stores_allow_record(monkeypatch, tmp_path: Path) -> None:
     _configure_test_db(monkeypatch, tmp_path)
 

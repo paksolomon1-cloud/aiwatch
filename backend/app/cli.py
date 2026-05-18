@@ -381,6 +381,13 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_demo_lobstertrap_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     ingest_demo_lobstertrap_parser.set_defaults(handler=handle_ingest_demo_lobstertrap_audit)
 
+    lobstertrap_status_parser = subparsers.add_parser(
+        "lobstertrap-status",
+        help="Print local Lobster Trap integration status from the AIWatch backend.",
+    )
+    lobstertrap_status_parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
+    lobstertrap_status_parser.set_defaults(handler=handle_lobstertrap_status)
+
     return parser
 
 
@@ -637,6 +644,17 @@ def handle_ingest_demo_lobstertrap_audit(args: argparse.Namespace) -> int:
         follow=False,
     )
     return handle_ingest_lobstertrap_audit(demo_args)
+
+
+def handle_lobstertrap_status(args: argparse.Namespace) -> int:
+    try:
+        status = request_json("/v1/integrations/lobstertrap/status", backend_url=args.backend_url)
+    except urllib.error.URLError:
+        print(BACKEND_DOWN_MESSAGE)
+        return 1
+
+    print(json.dumps(status, indent=2, sort_keys=True))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

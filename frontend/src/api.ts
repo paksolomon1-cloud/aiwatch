@@ -6,6 +6,7 @@ import type {
   DemoSeedResponse,
   EventIngestResponse,
   HealthResponse,
+  LobsterTrapIntegrationStatus,
   SessionReplay,
   ToolFingerprint,
   ToolObservation,
@@ -76,6 +77,10 @@ export function getAuditTimeline(limit = 100): Promise<AuditTimelineRecord[]> {
 
 export function getAuditSummary(): Promise<AuditSummaryResponse> {
   return request<AuditSummaryResponse>('/v1/audit/summary')
+}
+
+export function getLobsterTrapStatus(): Promise<LobsterTrapIntegrationStatus> {
+  return request<LobsterTrapIntegrationStatus>('/v1/integrations/lobstertrap/status')
 }
 
 export function getTool(fingerprintId: string): Promise<ToolFingerprint> {

@@ -149,6 +149,25 @@ export interface AuditSummaryResponse {
   source_layer_breakdown: AuditSourceLayerBreakdown[]
 }
 
+export interface LobsterTrapIntegrationStatus {
+  source: 'lobstertrap'
+  configured: boolean
+  status: 'active' | 'stale' | 'inactive' | 'no_records' | string
+  total_records: number
+  deny_count: number
+  human_review_count: number
+  quarantine_count: number
+  allow_count: number
+  redacted_count: number
+  last_record_at: string | null
+  seconds_since_last_record?: number
+  last_decision: string | null
+  last_rule_id: string | null
+  last_summary: string | null
+  suggested_ingest_command: string
+  demo_ingest_command: string
+}
+
 export interface DemoSeedItem {
   name: string
   event_id: string

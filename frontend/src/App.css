@@ -806,7 +806,8 @@ input {
 
 .audit-integration-card,
 .audit-source-layer-card,
-.audit-code-strip {
+.audit-code-strip,
+.lobstertrap-status-card {
   min-width: 0;
   border-radius: 0.45rem;
   border: 1px solid rgba(77, 200, 255, 0.16);
@@ -847,6 +848,86 @@ input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.audit-code-strip p,
+.lobstertrap-status-card p {
+  margin: 0.25rem 0 0;
+}
+
+.lobstertrap-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.lobstertrap-status-card h3 {
+  margin: 0;
+}
+
+.integration-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(77, 200, 255, 0.22);
+  background: rgba(77, 200, 255, 0.09);
+  color: #d9f6ff;
+  padding: 0.28rem 0.72rem;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.integration-status-active {
+  border-color: rgba(60, 220, 140, 0.32);
+  background: rgba(60, 220, 140, 0.1);
+  color: #a7f3c2;
+}
+
+.integration-status-stale,
+.integration-status-inactive {
+  border-color: rgba(255, 209, 102, 0.3);
+  background: rgba(255, 209, 102, 0.1);
+  color: #ffe28a;
+}
+
+.integration-status-no_records {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+}
+
+.lobstertrap-status-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.lobstertrap-status-grid div {
+  min-width: 0;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(30, 49, 71, 0.82);
+  background: rgba(8, 15, 26, 0.66);
+  padding: 0.62rem;
+}
+
+.lobstertrap-status-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lobstertrap-status-grid strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.96rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .audit-summary-grid {
@@ -1242,6 +1323,7 @@ pre {
   }
 
   .audit-code-strip,
+  .lobstertrap-status-grid,
   .audit-source-layer-card {
     grid-template-columns: 1fr;
   }

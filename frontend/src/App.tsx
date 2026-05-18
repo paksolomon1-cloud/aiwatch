@@ -10,6 +10,7 @@ import {
   getEvents,
   getHealth,
   getSessionReplay,
+  getLobsterTrapStatus,
   getTool,
   getToolHistory,
   getTools,
@@ -24,6 +25,7 @@ import type {
   DemoSeedResponse,
   EventIngestResponse,
   HealthResponse,
+  LobsterTrapIntegrationStatus,
   SessionReplay,
   Severity,
   ToolFingerprint,
@@ -107,6 +109,18 @@ function formatAuditLayer(layer: string): string {
   }
 
   return toSentenceCase(layer)
+}
+
+function formatIntegrationStatus(status: string | null | undefined): string {
+  if (!status) {
+    return 'Unknown'
+  }
+
+  if (status === 'no_records') {
+    return 'No records'
+  }
+
+  return toSentenceCase(status)
 }
 
 function getAuditRecordKey(record: AuditTimelineRecord, index: number): string {
@@ -491,6 +505,7 @@ function App() {
   const [tools, setTools] = useState<ToolFingerprint[]>([])
   const [auditTimeline, setAuditTimeline] = useState<AuditTimelineRecord[]>([])
   const [auditSummary, setAuditSummary] = useState<AuditSummaryResponse | null>(null)
+  const [lobsterTrapStatus, setLobsterTrapStatus] = useState<LobsterTrapIntegrationStatus | null>(null)
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [sessionInput, setSessionInput] = useState('')
@@ -537,13 +552,22 @@ function App() {
     setErrorMessage(null)
 
     try {
-      const [nextHealth, nextEvents, nextAlerts, nextTools, nextAuditTimeline, nextAuditSummary] = await Promise.all([
+      const [
+        nextHealth,
+        nextEvents,
+        nextAlerts,
+        nextTools,
+        nextAuditTimeline,
+        nextAuditSummary,
+        nextLobsterTrapStatus,
+      ] = await Promise.all([
         getHealth(),
         getEvents(),
         getAlerts(),
         getTools(),
         getAuditTimeline(),
         getAuditSummary(),
+        getLobsterTrapStatus(),
       ])
 
       setHealth(nextHealth)
@@ -564,6 +588,7 @@ function App() {
       )
       setAuditTimeline(nextAuditTimeline)
       setAuditSummary(nextAuditSummary)
+      setLobsterTrapStatus(nextLobsterTrapStatus)
     } catch (error) {
       const message = error instanceof Error ? error.message : BACKEND_OFFLINE_MESSAGE
       setErrorMessage(message)
@@ -573,6 +598,7 @@ function App() {
       setTools([])
       setAuditTimeline([])
       setAuditSummary(null)
+      setLobsterTrapStatus(null)
       setSelectedAlert(null)
       setSelectedTool(null)
       setSelectedToolId('')
@@ -1208,6 +1234,8 @@ function App() {
   }
 
   function renderUnifiedAuditTimeline() {
+    const lobsterTrapStatusValue = lobsterTrapStatus?.status ?? 'no_records'
+    const lobsterTrapStatusLabel = formatIntegrationStatus(lobsterTrapStatusValue)
     const summaryCards = [
       ['Total records', auditSummary?.total_records ?? auditTimeline.length],
       ['AIWatch MCP', auditSummary?.aiwatch_mcp_records ?? aiwatchAuditCount],
@@ -1276,9 +1304,56 @@ function App() {
             </p>
           </div>
 
+          <div className="lobstertrap-status-card">
+            <div className="timeline-title">
+              <div>
+                <span className="panel-label">Local Lobster Trap audit ingestion</span>
+                <h3>Lobster Trap Integration</h3>
+              </div>
+              <span className={`integration-status-badge integration-status-${lobsterTrapStatusValue}`}>
+                {lobsterTrapStatusLabel}
+              </span>
+            </div>
+            <p className="muted-copy small-copy">
+              Prompt/response audit source. Records are ingested into AIWatch’s local unified timeline.
+              Local integration, not TerraFabric deployment.
+            </p>
+            <div className="lobstertrap-status-grid">
+              <div>
+                <span>Total records</span>
+                <strong>{lobsterTrapStatus?.total_records ?? lobstertrapAuditCount}</strong>
+              </div>
+              <div>
+                <span>DENY</span>
+                <strong>{lobsterTrapStatus?.deny_count ?? auditSummary?.deny_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>HUMAN_REVIEW</span>
+                <strong>{lobsterTrapStatus?.human_review_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>QUARANTINE</span>
+                <strong>{lobsterTrapStatus?.quarantine_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>Last record</span>
+                <strong>{formatTimestamp(lobsterTrapStatus?.last_record_at)}</strong>
+              </div>
+              <div>
+                <span>Last decision / rule</span>
+                <strong>
+                  {lobsterTrapStatus?.last_decision ?? 'n/a'} / {lobsterTrapStatus?.last_rule_id ?? 'n/a'}
+                </strong>
+              </div>
+            </div>
+          </div>
+
           <div className="audit-code-strip">
-            <span>Demo ingestion</span>
-            <code>{DEMO_LOBSTERTRAP_INGEST_COMMAND}</code>
+            <div>
+              <span>Demo ingestion</span>
+              <p className="muted-copy small-copy">Populates the local Lobster Trap side of Unified Audit.</p>
+            </div>
+            <code>{lobsterTrapStatus?.demo_ingest_command ?? DEMO_LOBSTERTRAP_INGEST_COMMAND}</code>
           </div>
 
           <div className="audit-summary-grid">
