@@ -14,8 +14,19 @@ from typing import Any, Sequence
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SESSION_ID = "http-mcp-relay-smoke-001"
 SERVER_ID = "fixture-http-notes-mcp"
-EXPECTED_TOOLS = {"list_notes", "echo_note"}
-EXPECTED_NOTE_TEXT = "Review the local MCP relay smoke."
+EXPECTED_TOOLS = {"list_notes", "echo_note", "get_weather_mock"}
+SMOKE_TOOL_CALLS: dict[str, dict[str, Any]] = {
+    "list_notes": {
+        "arguments": {"limit": 2},
+        "expected_text": "Review the local MCP relay smoke.",
+        "proof_label": "list_notes returned fixture notes",
+    },
+    "get_weather_mock": {
+        "arguments": {"location": "San Francisco, CA"},
+        "expected_text": "Mock weather for San Francisco, CA: 72F, sunny, wind 8 mph.",
+        "proof_label": "get_weather_mock returned fixed fake weather",
+    },
+}
 
 
 def _free_port() -> int:
@@ -68,7 +79,8 @@ def _terminate(process: subprocess.Popen[Any]) -> None:
         process.wait(timeout=3)
 
 
-def _client_frames() -> list[dict[str, Any]]:
+def _client_frames(tool_name: str) -> list[dict[str, Any]]:
+    tool_call = SMOKE_TOOL_CALLS[tool_name]
     return [
         {
             "jsonrpc": "2.0",
@@ -92,14 +104,14 @@ def _client_frames() -> list[dict[str, Any]]:
             "id": 3,
             "method": "tools/call",
             "params": {
-                "name": "list_notes",
-                "arguments": {"limit": 2},
+                "name": tool_name,
+                "arguments": tool_call["arguments"],
             },
         },
     ]
 
 
-def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
+def run_smoke(*, backend_url: str, tool_name: str = "list_notes", python_executable: str | None = None) -> int:
     executable = python_executable or sys.executable
     session_id = f"{SESSION_ID}-{uuid.uuid4().hex[:8]}"
     fixture_port = _free_port()
@@ -149,7 +161,7 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
         _wait_for_port(relay_port)
 
         responses_by_method: dict[str, tuple[int, Any | None]] = {}
-        for frame in _client_frames():
+        for frame in _client_frames(tool_name):
             status, response = _post_json(relay_url, frame)
             method = frame["method"]
             responses_by_method[method] = (status, response)
@@ -174,7 +186,8 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
             for item in content
             if isinstance(item, dict) and isinstance(item.get("text"), str)
         ) if isinstance(content, list) else ""
-        if EXPECTED_NOTE_TEXT not in content_text:
+        expected_text = str(SMOKE_TOOL_CALLS[tool_name]["expected_text"])
+        if expected_text not in content_text:
             print("Expected fixture MCP tool response text was not returned through the relay.", file=sys.stderr)
             print(json.dumps(tools_call_response, indent=2), file=sys.stderr)
             return 1
@@ -191,7 +204,7 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
                 if event.get("action_type") == "tool_register"
                 and event.get("action_params", {}).get("server_id") == SERVER_ID
             }
-            observed_call = _observed_tool_call_event(smoke_events)
+            observed_call = _observed_tool_call_event(smoke_events, tool_name=tool_name)
             if EXPECTED_TOOLS.issubset(observed_tool_names) and observed_call is not None:
                 expected_events_seen = True
                 break
@@ -205,7 +218,7 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
             print(json.dumps(smoke_events or events, indent=2), file=sys.stderr)
             return 1
 
-        tool_call_event = _observed_tool_call_event(smoke_events)
+        tool_call_event = _observed_tool_call_event(smoke_events, tool_name=tool_name)
         if tool_call_event is None:
             print(f"Expected tools/call observation not found for session {session_id}.", file=sys.stderr)
             print(json.dumps(smoke_events, indent=2), file=sys.stderr)
@@ -221,7 +234,7 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
             print(json.dumps(smoke_alerts, indent=2), file=sys.stderr)
             return 1
 
-        print("HTTP MCP relay smoke upstream response: list_notes returned fixture notes")
+        print(f"HTTP MCP relay smoke upstream response: {SMOKE_TOOL_CALLS[tool_name]['proof_label']}")
         print(f"HTTP MCP relay smoke observed tools: {', '.join(sorted(EXPECTED_TOOLS))}")
         print("HTTP MCP relay smoke observed event:")
         print(json.dumps(observation, indent=2, sort_keys=True))
@@ -233,14 +246,14 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
         _terminate(fixture_process)
 
 
-def _observed_tool_call_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _observed_tool_call_event(events: list[dict[str, Any]], *, tool_name: str) -> dict[str, Any] | None:
     for event in events:
         action_params = event.get("action_params")
         if (
             event.get("action_type") == "tool_call"
             and isinstance(action_params, dict)
             and action_params.get("server_id") == SERVER_ID
-            and action_params.get("tool_name") == "list_notes"
+            and action_params.get("tool_name") == tool_name
         ):
             return event
     return None
@@ -269,12 +282,18 @@ def _tool_call_observation_summary(event: dict[str, Any]) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the local POST JSON HTTP MCP relay smoke.")
     parser.add_argument("--backend-url", default="http://127.0.0.1:7330")
+    parser.add_argument(
+        "--tool",
+        choices=sorted(SMOKE_TOOL_CALLS),
+        default="list_notes",
+        help="Fixture MCP tool to call through the AIWatch HTTP MCP relay.",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return run_smoke(backend_url=args.backend_url)
+    return run_smoke(backend_url=args.backend_url, tool_name=args.tool)
 
 
 if __name__ == "__main__":

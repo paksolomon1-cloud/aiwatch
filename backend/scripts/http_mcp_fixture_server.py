@@ -16,6 +16,12 @@ _NOTES = [
     "Confirm benign tools do not create alerts.",
     "Keep HTTP relay claims narrow.",
 ]
+_MOCK_WEATHER = {
+    "location": "San Francisco, CA",
+    "condition": "sunny",
+    "temperature_f": 72,
+    "wind_mph": 8,
+}
 
 
 def tool_definitions() -> list[dict[str, Any]]:
@@ -56,6 +62,26 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "text": {"type": "string"},
                 },
                 "required": ["text"],
+            },
+        },
+        {
+            "name": "get_weather_mock",
+            "description": "Returns fixed fake weather data for local relay testing.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                },
+            },
+            "outputSchema": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                    "condition": {"type": "string"},
+                    "temperature_f": {"type": "integer"},
+                    "wind_mph": {"type": "integer"},
+                },
+                "required": ["location", "condition", "temperature_f", "wind_mph"],
             },
         },
     ]
@@ -157,6 +183,34 @@ def handle_frame(frame: dict[str, Any]) -> tuple[int, dict[str, Any] | None]:
                             }
                         ],
                         "structuredContent": {"text": text},
+                        "isError": False,
+                    },
+                },
+            )
+
+        if tool_name == "get_weather_mock":
+            weather = dict(_MOCK_WEATHER)
+            if isinstance(arguments, dict):
+                raw_location = arguments.get("location")
+                if isinstance(raw_location, str) and raw_location.strip():
+                    weather["location"] = raw_location.strip()
+            summary = (
+                f"Mock weather for {weather['location']}: "
+                f"{weather['temperature_f']}F, {weather['condition']}, wind {weather['wind_mph']} mph."
+            )
+            return (
+                200,
+                {
+                    "jsonrpc": "2.0",
+                    "id": jsonrpc_id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": summary,
+                            }
+                        ],
+                        "structuredContent": weather,
                         "isError": False,
                     },
                 },

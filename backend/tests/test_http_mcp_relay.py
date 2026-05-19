@@ -229,12 +229,40 @@ def _tools_list_response(frame: dict[str, Any]) -> dict[str, Any]:
                     "description": "Echoes a note.",
                     "inputSchema": {"type": "object"},
                 },
+                {
+                    "name": "get_weather_mock",
+                    "description": "Returns fixed fake weather data.",
+                    "inputSchema": {"type": "object"},
+                },
             ]
         },
     }
 
 
 def _tool_call_response(frame: dict[str, Any]) -> dict[str, Any]:
+    params = frame.get("params")
+    tool_name = params.get("name") if isinstance(params, dict) else None
+    if tool_name == "get_weather_mock":
+        return {
+            "jsonrpc": "2.0",
+            "id": frame.get("id"),
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Mock weather for San Francisco, CA: 72F, sunny, wind 8 mph.",
+                    }
+                ],
+                "structuredContent": {
+                    "location": "San Francisco, CA",
+                    "condition": "sunny",
+                    "temperature_f": 72,
+                    "wind_mph": 8,
+                },
+                "isError": False,
+            },
+        }
+
     return {
         "jsonrpc": "2.0",
         "id": frame.get("id"),
@@ -413,6 +441,64 @@ def test_tools_call_post_creates_normalized_event_sent_to_backend_events_route()
     }
     assert event["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
     assert raw_secret not in json.dumps(event)
+
+
+def test_weather_mock_tool_call_is_forwarded_and_observed() -> None:
+    with _backend_server() as (backend_url, backend_events):
+        with _upstream_server(_default_upstream_response) as (upstream_url, upstream_calls):
+            with _relay_server(upstream_url=upstream_url, backend_url=backend_url) as (relay_url, _stderr):
+                list_status, _list_body, _list_headers = _post(
+                    relay_url,
+                    _json_bytes({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
+                )
+                call_status, call_body, _call_headers = _post(
+                    relay_url,
+                    _json_bytes(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 3,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "get_weather_mock",
+                                "arguments": {"location": "San Francisco, CA"},
+                            },
+                        }
+                    ),
+                )
+                _wait_for(lambda: len(backend_events) == 4)
+
+    response = json.loads(call_body)
+    event = next(
+        event
+        for event in backend_events
+        if event["action_type"] == "tool_call"
+        and event["action_params"]["tool_name"] == "get_weather_mock"
+    )
+    assert list_status == 200
+    assert call_status == 200
+    assert response["result"]["isError"] is False
+    assert response["result"]["structuredContent"] == {
+        "location": "San Francisco, CA",
+        "condition": "sunny",
+        "temperature_f": 72,
+        "wind_mph": 8,
+    }
+    assert "Mock weather for San Francisco, CA" in response["result"]["content"][0]["text"]
+    assert len(upstream_calls) == 2
+    assert upstream_calls[-1]["frame"]["method"] == "tools/call"
+    assert upstream_calls[-1]["frame"]["params"]["name"] == "get_weather_mock"
+    assert event["source"] == "mcp"
+    assert event["action_type"] == "tool_call"
+    assert isinstance(event["timestamp"], str)
+    assert event["action_params"]["server_id"] == "fixture-http-notes-mcp"
+    assert event["action_params"]["tool_name"] == "get_weather_mock"
+    assert event["action_params"]["arguments"] == {"location": "San Francisco, CA"}
+    assert event["action_params"]["direction"] == "client_to_server"
+    assert event["action_params"]["status"] == "success"
+    assert event["action_params"]["upstream"] == {
+        "contacted": True,
+        "http_status": 200,
+    }
 
 
 def test_default_enforcement_mode_observes_and_forwards_r_mcp_005(
@@ -645,11 +731,19 @@ def test_tools_list_request_and_json_response_create_tool_register_events() -> N
                     relay_url,
                     _json_bytes({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
                 )
-                _wait_for(lambda: len(backend_events) == 2)
+                _wait_for(lambda: len(backend_events) == 3)
 
     assert status == 200
-    assert [event["action_type"] for event in backend_events] == ["tool_register", "tool_register"]
-    assert {event["action_params"]["tool_name"] for event in backend_events} == {"list_notes", "echo_note"}
+    assert [event["action_type"] for event in backend_events] == [
+        "tool_register",
+        "tool_register",
+        "tool_register",
+    ]
+    assert {event["action_params"]["tool_name"] for event in backend_events} == {
+        "list_notes",
+        "echo_note",
+        "get_weather_mock",
+    }
 
 
 def test_string_id_initialize_with_tools_array_and_notification_do_not_poison_numeric_tools_list() -> None:
@@ -675,9 +769,13 @@ def test_string_id_initialize_with_tools_array_and_notification_do_not_poison_nu
                     relay_url,
                     _json_bytes({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}),
                 )
-                _wait_for(lambda: len(backend_events) == 2)
+                _wait_for(lambda: len(backend_events) == 3)
 
-    assert {event["action_params"]["tool_name"] for event in backend_events} == {"list_notes", "echo_note"}
+    assert {event["action_params"]["tool_name"] for event in backend_events} == {
+        "list_notes",
+        "echo_note",
+        "get_weather_mock",
+    }
 
 
 def test_oversized_upstream_json_response_is_forwarded_without_recording() -> None:
