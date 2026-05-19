@@ -402,8 +402,15 @@ def test_tools_call_post_creates_normalized_event_sent_to_backend_events_route()
     event = backend_events[0]
     assert event["source"] == "mcp"
     assert event["action_type"] == "tool_call"
+    assert isinstance(event["timestamp"], str)
     assert event["action_params"]["server_id"] == "fixture-http-notes-mcp"
     assert event["action_params"]["tool_name"] == "list_notes"
+    assert event["action_params"]["direction"] == "client_to_server"
+    assert event["action_params"]["status"] == "success"
+    assert event["action_params"]["upstream"] == {
+        "contacted": True,
+        "http_status": 200,
+    }
     assert event["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
     assert raw_secret not in json.dumps(event)
 
@@ -465,6 +472,12 @@ def test_deny_mode_blocks_r_mcp_005_before_upstream_forwarding() -> None:
     assert response["error"]["data"]["rule_id"] == "R-MCP-005"
     assert upstream_calls == []
     assert event["action_params"]["arguments"]["api_key"] == "[REDACTED:OPENAI_KEY]"
+    assert event["action_params"]["direction"] == "client_to_server"
+    assert event["action_params"]["status"] == "denied"
+    assert event["action_params"]["upstream"] == {
+        "contacted": False,
+        "http_status": None,
+    }
     assert event["action_params"]["enforcement"] == {
         "action": "deny",
         "enforcement_mode": "deny",

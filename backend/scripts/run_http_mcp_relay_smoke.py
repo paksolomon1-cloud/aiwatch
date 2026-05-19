@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -14,6 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 SESSION_ID = "http-mcp-relay-smoke-001"
 SERVER_ID = "fixture-http-notes-mcp"
 EXPECTED_TOOLS = {"list_notes", "echo_note"}
+EXPECTED_NOTE_TEXT = "Review the local MCP relay smoke."
 
 
 def _free_port() -> int:
@@ -99,6 +101,7 @@ def _client_frames() -> list[dict[str, Any]]:
 
 def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
     executable = python_executable or sys.executable
+    session_id = f"{SESSION_ID}-{uuid.uuid4().hex[:8]}"
     fixture_port = _free_port()
     relay_port = _free_port()
     fixture_url = f"http://127.0.0.1:{fixture_port}/mcp"
@@ -137,7 +140,7 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
                 "--server-id",
                 SERVER_ID,
                 "--session-id",
-                SESSION_ID,
+                session_id,
             ],
             cwd=ROOT_DIR,
             stdout=subprocess.DEVNULL,
@@ -145,46 +148,122 @@ def run_smoke(*, backend_url: str, python_executable: str | None = None) -> int:
         )
         _wait_for_port(relay_port)
 
+        responses_by_method: dict[str, tuple[int, Any | None]] = {}
         for frame in _client_frames():
             status, response = _post_json(relay_url, frame)
             method = frame["method"]
+            responses_by_method[method] = (status, response)
             print(f"[client] {method} -> HTTP {status}")
             if response is not None:
                 print(f"[client] {json.dumps(response, sort_keys=True)}")
 
-        expected_tools_seen = False
-        tools: list[dict[str, Any]] = []
+        tools_list_status, tools_list_response = responses_by_method["tools/list"]
+        if tools_list_status != 200 or not isinstance(tools_list_response, dict):
+            print("Expected successful MCP tools/list response from fixture through relay.", file=sys.stderr)
+            return 1
+
+        tools_call_status, tools_call_response = responses_by_method["tools/call"]
+        if tools_call_status != 200 or not isinstance(tools_call_response, dict):
+            print("Expected successful MCP tools/call response from fixture through relay.", file=sys.stderr)
+            return 1
+
+        result = tools_call_response.get("result")
+        content = result.get("content") if isinstance(result, dict) else None
+        content_text = "\n".join(
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ) if isinstance(content, list) else ""
+        if EXPECTED_NOTE_TEXT not in content_text:
+            print("Expected fixture MCP tool response text was not returned through the relay.", file=sys.stderr)
+            print(json.dumps(tools_call_response, indent=2), file=sys.stderr)
+            return 1
+
+        expected_events_seen = False
+        events: list[dict[str, Any]] = []
+        smoke_events: list[dict[str, Any]] = []
         for _ in range(20):
-            tools = _request_json(f"{backend_url}/v1/tools")
+            events = _request_json(f"{backend_url}/v1/events")
+            smoke_events = [event for event in events if event.get("session_id") == session_id]
             observed_tool_names = {
-                item.get("tool_name")
-                for item in tools
-                if item.get("server_id") == SERVER_ID
+                event.get("action_params", {}).get("tool_name")
+                for event in smoke_events
+                if event.get("action_type") == "tool_register"
+                and event.get("action_params", {}).get("server_id") == SERVER_ID
             }
-            if EXPECTED_TOOLS.issubset(observed_tool_names):
-                expected_tools_seen = True
+            observed_call = _observed_tool_call_event(smoke_events)
+            if EXPECTED_TOOLS.issubset(observed_tool_names) and observed_call is not None:
+                expected_events_seen = True
                 break
             time.sleep(0.25)
 
         alerts = _request_json(f"{backend_url}/v1/alerts")
-        smoke_alerts = [alert for alert in alerts if alert.get("session_id") == SESSION_ID]
+        smoke_alerts = [alert for alert in alerts if alert.get("session_id") == session_id]
 
-        if not expected_tools_seen:
-            print(f"Expected HTTP fixture tools not found for {SERVER_ID}.", file=sys.stderr)
-            print(json.dumps(tools, indent=2), file=sys.stderr)
+        if not expected_events_seen:
+            print(f"Expected fresh HTTP relay observation events not found for session {session_id}.", file=sys.stderr)
+            print(json.dumps(smoke_events or events, indent=2), file=sys.stderr)
+            return 1
+
+        tool_call_event = _observed_tool_call_event(smoke_events)
+        if tool_call_event is None:
+            print(f"Expected tools/call observation not found for session {session_id}.", file=sys.stderr)
+            print(json.dumps(smoke_events, indent=2), file=sys.stderr)
+            return 1
+
+        observation = _tool_call_observation_summary(tool_call_event)
+        if observation["direction"] != "client_to_server" or observation["status"] != "success":
+            print("Expected routed tools/call observation to record direction and success.", file=sys.stderr)
+            print(json.dumps(tool_call_event, indent=2), file=sys.stderr)
             return 1
         if smoke_alerts:
             print("Unexpected alerts for benign HTTP MCP relay smoke:", file=sys.stderr)
             print(json.dumps(smoke_alerts, indent=2), file=sys.stderr)
             return 1
 
+        print("HTTP MCP relay smoke upstream response: list_notes returned fixture notes")
         print(f"HTTP MCP relay smoke observed tools: {', '.join(sorted(EXPECTED_TOOLS))}")
+        print("HTTP MCP relay smoke observed event:")
+        print(json.dumps(observation, indent=2, sort_keys=True))
         print("HTTP MCP relay smoke observed alerts: 0")
         return 0
     finally:
         if relay_process is not None:
             _terminate(relay_process)
         _terminate(fixture_process)
+
+
+def _observed_tool_call_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for event in events:
+        action_params = event.get("action_params")
+        if (
+            event.get("action_type") == "tool_call"
+            and isinstance(action_params, dict)
+            and action_params.get("server_id") == SERVER_ID
+            and action_params.get("tool_name") == "list_notes"
+        ):
+            return event
+    return None
+
+
+def _tool_call_observation_summary(event: dict[str, Any]) -> dict[str, Any]:
+    action_params = event.get("action_params")
+    if not isinstance(action_params, dict):
+        action_params = {}
+    upstream = action_params.get("upstream")
+    if not isinstance(upstream, dict):
+        upstream = {}
+    return {
+        "session_id": event.get("session_id"),
+        "timestamp": event.get("timestamp"),
+        "action_type": event.get("action_type"),
+        "server_id": action_params.get("server_id"),
+        "tool_name": action_params.get("tool_name"),
+        "direction": action_params.get("direction"),
+        "status": action_params.get("status"),
+        "upstream_contacted": upstream.get("contacted"),
+        "upstream_http_status": upstream.get("http_status"),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:

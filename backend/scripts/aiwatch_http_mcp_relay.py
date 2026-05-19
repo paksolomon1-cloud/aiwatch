@@ -150,6 +150,13 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
                 for event in client_events
             ]
         if enforcement_decision.should_deny:
+            client_events = _annotate_client_events_transport(
+                client_events,
+                direction="client_to_server",
+                status="denied",
+                upstream_contacted=False,
+                upstream_http_status=None,
+            )
             _post_observed_events(self.server, client_events)
             self._send_mcp_denial_response(client_frame, enforcement_decision)
             denial_label = enforcement_decision.rule_id or enforcement_decision.reason or "manual_enforcement"
@@ -170,10 +177,18 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
             )
         except UpstreamUnavailable as error:
             self._send_error_response(error.status, error.detail)
+            client_events = _annotate_client_events_transport(
+                client_events,
+                direction="client_to_server",
+                status="failure",
+                upstream_contacted=False,
+                upstream_http_status=error.status,
+            )
             _post_observed_events(self.server, client_events)
             return
 
         server_events: Sequence[AgentEvent] = []
+        server_frame: dict[str, Any] | None = None
         if upstream_response.oversized_for_observation:
             _stderr(self.server, "[aiwatch-http-relay] oversized upstream response forwarded without recording")
         else:
@@ -182,6 +197,13 @@ class AiWatchHttpMcpRelayHandler(BaseHTTPRequestHandler):
                 observed_server = self.server.observer.observe_server_frame(server_frame)
                 server_events = observed_server.events
 
+        client_events = _annotate_client_events_transport(
+            client_events,
+            direction="client_to_server",
+            status=_upstream_observation_status(upstream_response, server_frame),
+            upstream_contacted=True,
+            upstream_http_status=upstream_response.status,
+        )
         self._send_upstream_response(upstream_response)
         _post_observed_events(self.server, [*client_events, *server_events])
 
@@ -436,6 +458,40 @@ def _parse_upstream_response_frame(
         _stderr(server, "[aiwatch-http-relay] non-object upstream JSON forwarded without recording")
         return None
     return parsed
+
+
+def _upstream_observation_status(
+    upstream_response: UpstreamResponse,
+    server_frame: dict[str, Any] | None,
+) -> str:
+    if upstream_response.status < 200 or upstream_response.status >= 400:
+        return "failure"
+    if isinstance(server_frame, dict) and isinstance(server_frame.get("error"), dict):
+        return "failure"
+    return "success"
+
+
+def _annotate_client_events_transport(
+    events: Sequence[AgentEvent],
+    *,
+    direction: str,
+    status: str,
+    upstream_contacted: bool,
+    upstream_http_status: int | None,
+) -> list[AgentEvent]:
+    annotated_events: list[AgentEvent] = []
+    for event in events:
+        action_params = {
+            **event.action_params,
+            "direction": direction,
+            "status": status,
+            "upstream": {
+                "contacted": upstream_contacted,
+                "http_status": upstream_http_status,
+            },
+        }
+        annotated_events.append(event.model_copy(update={"action_params": action_params}))
+    return annotated_events
 
 
 def _post_observed_events(server: AiWatchHttpMcpRelayServer, events: Sequence[AgentEvent]) -> tuple[int, int]:
